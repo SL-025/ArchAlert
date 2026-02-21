@@ -1,10 +1,20 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 app = FastAPI()
+
+# CORS so frontend can call backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 MONTH_FILE = "january2026.csv"
 LIVE_URL = "https://slmpd.org/calls/"
@@ -16,22 +26,18 @@ cache = {
     "live_last_updated": None,
 }
 
-def to_iso(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
 def grid_cell(lat: float, lng: float, precision: int = 3):
-    # precision=3 ~ ~100m-ish. Good for privacy + speed.
+    # precision=3 ~ ~100m-ish; good for privacy + speed
     return round(lat, precision), round(lng, precision)
 
 def load_monthly():
-    # Load CSV and build grid heat cells.
     df = pd.read_csv(MONTH_FILE)
 
-    # Try to find lat/lng columns (names vary). Adjust if needed after you inspect columns.
+    # Adjust if your CSV uses different column names
     possible_lat = [c for c in df.columns if c.lower() in ["lat", "latitude", "y"]]
     possible_lng = [c for c in df.columns if c.lower() in ["lon", "lng", "longitude", "x"]]
+
     if not possible_lat or not possible_lng:
-        # If no coordinates, you can switch to neighborhood aggregation later.
         cache["monthly_cells"] = []
         cache["monthly_loaded"] = True
         return
@@ -39,7 +45,6 @@ def load_monthly():
     lat_col, lng_col = possible_lat[0], possible_lng[0]
     df = df.dropna(subset=[lat_col, lng_col])
 
-    # Build grid counts
     counts = {}
     for lat, lng in zip(df[lat_col].astype(float), df[lng_col].astype(float)):
         clat, clng = grid_cell(lat, lng)
@@ -53,19 +58,10 @@ def load_monthly():
     cache["monthly_loaded"] = True
 
 def fetch_live_calls():
-    # Fetch and parse SLMPD calls page.
     html = requests.get(LIVE_URL, timeout=20).text
     soup = BeautifulSoup(html, "html.parser")
 
-    text = soup.get_text(" ", strip=True).lower()
-    # best effort: find "last updated" text if present
-    last_updated = None
-    if "last updated" in text:
-        last_updated = to_iso(datetime.now(timezone.utc))  # fallback if parsing is hard
-    else:
-        last_updated = to_iso(datetime.now(timezone.utc))
-
-    # Find the first table and read rows
+    # Basic table parse
     table = soup.find("table")
     calls = []
     if table:
@@ -73,16 +69,15 @@ def fetch_live_calls():
         for r in rows[1:]:
             cols = [c.get_text(" ", strip=True) for c in r.find_all(["td", "th"])]
             if len(cols) >= 3:
-                # Columns vary; keep generic
                 calls.append({
                     "time": cols[0],
                     "type": cols[1],
-                    "location": cols[2],   # keep block text only
+                    "location": cols[2],  # keep block text only
                     "source": "SLMPD Calls for Service (unverified)"
                 })
 
-    cache["live_calls"] = calls[:500]  # cap for safety
-    cache["live_last_updated"] = last_updated
+    cache["live_calls"] = calls[:500]
+    cache["live_last_updated"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 @app.on_event("startup")
 def startup():
@@ -108,7 +103,6 @@ def monthly_heat():
 
 @app.get("/live-calls")
 def live_calls():
-    # In hackathon: refresh on demand
     fetch_live_calls()
     return {"last_updated": cache["live_last_updated"], "items": cache["live_calls"]}
 
@@ -121,8 +115,3 @@ def live_summary():
         by_type[t] = by_type.get(t, 0) + 1
     top = sorted(by_type.items(), key=lambda x: x[1], reverse=True)[:10]
     return {"last_updated": cache["live_last_updated"], "top_types": top, "total": len(cache["live_calls"])}
-
-@app.get("/refresh-live")
-def refresh_live():
-    fetch_live_calls()
-    return {"ok": True, "last_updated": cache["live_last_updated"], "count": len(cache["live_calls"])}
