@@ -67,6 +67,8 @@ ArchAlert/
 
 ## Requirements
 
+- -r backend/requirements.txt
+- -r frontend/requirements.txt
 - Python 3.10+
 - Node.js 18+
 - Git
