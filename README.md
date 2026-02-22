@@ -1,3 +1,13 @@
+---
+title: ArchAlert
+emoji: 🚨
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # ArchAlert — AI‑Powered Urban Safety Awareness
 
 ArchAlert is a modern dashboard that helps users understand where recent incident activity is concentrated using historical heatmaps, live awareness data, and an AI‑assisted Risk Lens.
