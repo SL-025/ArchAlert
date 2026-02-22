@@ -4,10 +4,10 @@ import React from "react";
 
 export function Card(props: { title?: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, background: "#fff" }}>
+    <div className="surface2" style={{ padding: 14 }}>
       {(props.title || props.right) && (
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontWeight: 800, color: "#0f172a" }}>{props.title}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+          <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.92)" }}>{props.title}</div>
           <div>{props.right}</div>
         </div>
       )}
@@ -19,7 +19,7 @@ export function Card(props: { title?: string; right?: React.ReactNode; children:
 export function Button(props: {
   children: React.ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary";
   active?: boolean;
   disabled?: boolean;
   style?: React.CSSProperties;
@@ -27,22 +27,18 @@ export function Button(props: {
   const variant = props.variant ?? "secondary";
   const active = Boolean(props.active);
 
-  let bg = "#fff";
-  let color = "#0f172a";
-  let border = "1px solid #e5e7eb";
+  let background = "rgba(255,255,255,0.05)";
+  let border = "1px solid rgba(255,255,255,0.16)";
+  let color = "rgba(255,255,255,0.88)";
 
   if (variant === "primary") {
-    bg = "#2563eb";
-    color = "#fff";
-    border = "1px solid #2563eb";
+    background = "linear-gradient(135deg, var(--primary), var(--primary2))";
+    border = "1px solid rgba(255,255,255,0.20)";
+    color = "#06101a";
   } else if (active) {
-    bg = "#0f172a";
-    color = "#fff";
-    border = "1px solid #0f172a";
-  } else if (variant === "ghost") {
-    bg = "transparent";
-    color = "#0f172a";
-    border = "1px solid transparent";
+    background = "rgba(255,255,255,0.14)";
+    border = "1px solid rgba(255,255,255,0.22)";
+    color = "rgba(255,255,255,0.92)";
   }
 
   return (
@@ -53,10 +49,10 @@ export function Button(props: {
         padding: "10px 12px",
         borderRadius: 12,
         border,
-        background: bg,
+        background,
         color,
         cursor: props.disabled ? "not-allowed" : "pointer",
-        fontWeight: 800,
+        fontWeight: 900,
         opacity: props.disabled ? 0.6 : 1,
         ...props.style,
       }}
@@ -68,21 +64,7 @@ export function Button(props: {
 
 export function Pill(props: { children: React.ReactNode; title?: string }) {
   return (
-    <div
-      title={props.title}
-      style={{
-        fontSize: 12,
-        padding: "6px 10px",
-        borderRadius: 999,
-        border: "1px solid #e5e7eb",
-        background: "#f8fafc",
-        color: "#0f172a",
-        maxWidth: 360,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-      }}
-    >
+    <div className="badge" title={props.title}>
       {props.children}
     </div>
   );
@@ -95,13 +77,13 @@ export function LiveWindowToggle(props: {
 }) {
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      <Button active={props.value === "1h"} onClick={() => props.onChange("1h")} style={{ minWidth: 70 }}>
+      <Button active={props.value === "1h"} onClick={() => props.onChange("1h")} style={{ minWidth: 72 }}>
         1h
       </Button>
-      <Button active={props.value === "6h"} onClick={() => props.onChange("6h")} style={{ minWidth: 70 }}>
+      <Button active={props.value === "6h"} onClick={() => props.onChange("6h")} style={{ minWidth: 72 }}>
         6h
       </Button>
-      <Button active={props.value === "24h"} onClick={() => props.onChange("24h")} style={{ minWidth: 70 }}>
+      <Button active={props.value === "24h"} onClick={() => props.onChange("24h")} style={{ minWidth: 72 }}>
         24h
       </Button>
       {props.right}

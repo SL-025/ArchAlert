@@ -35,27 +35,24 @@ export default function Home() {
       const m = await fetch("http://localhost:8000/meta", { cache: "no-store" }).then((r) => r.json());
 
       const daysParam = lastDays ? `&last_days=${lastDays}` : "";
-
       const heatUrl =
         monthMode === "single"
           ? `http://localhost:8000/monthly-heat?month=${encodeURIComponent(selectedMonth)}${daysParam}`
           : `http://localhost:8000/historical-heat?months=${monthsBack}${daysParam}`;
 
       const statsUrl = `http://localhost:8000/monthly-stats?month=${encodeURIComponent(selectedMonth)}${daysParam}`;
-
       const hours = sinceToHours(since);
 
       const mh = await fetch(heatUrl, { cache: "no-store" }).then((r) => r.json());
       const st = await fetch(statsUrl, { cache: "no-store" }).then((r) => r.json());
-      const ls = await fetch(`http://localhost:8000/live-summary?since_hours=${hours}`, { cache: "no-store" }).then(
-        (r) => r.json()
+      const ls = await fetch(`http://localhost:8000/live-summary?since_hours=${hours}`, { cache: "no-store" }).then((r) =>
+        r.json()
       );
 
       setMeta(m);
       setMonthly(mh);
       setMonthlyStats(st);
       setLiveSummary(ls);
-
       setLastRefresh(new Date().toLocaleString());
     } finally {
       setLoadingAll(false);
@@ -84,20 +81,29 @@ export default function Home() {
     <div>
       <NavBar />
 
-      <div className="surface2" style={{ padding: 16, marginBottom: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div>
-            <div className="h1">ArchAlert</div>
-            <div className="sub">
-              AI‑Powered Urban Safety Awareness • Calls for Service are unverified • Not predictive policing
-            </div>
+      <div className="surface" style={{ padding: 18, marginBottom: 12 }}>
+        <div style={{ textAlign: "center" }}>
+          <h1 className="heroTitle">ArchAlert</h1>
+          <div className="heroSub">
+            AI‑Powered Urban Safety Awareness • Calls for Service are unverified • Not predictive policing
           </div>
+        </div>
 
+        <div className="hr" />
+
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
           <div className="badge" title="Auto refresh interval is 60 seconds">
             <span className="dot" />
             <span>
               {loadingAll ? "Refreshing..." : "Ready"} • Last refresh:{" "}
-              <b style={{ color: "rgba(255,255,255,0.9)" }}>{lastRefresh || "—"}</b>
+              <b style={{ color: "rgba(255,255,255,0.92)" }}>{lastRefresh || "—"}</b>
+            </span>
+          </div>
+
+          <div className="badge" title="Backend live data timestamp">
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--primary2)", display: "inline-block" }} />
+            <span>
+              Live updated: <b style={{ color: "rgba(255,255,255,0.92)" }}>{lastUpdated ? String(lastUpdated) : "—"}</b>
             </span>
           </div>
         </div>
@@ -137,13 +143,13 @@ export default function Home() {
           <Insights liveTotal={liveTotal} topTypes={topTypes} lastUpdated={lastUpdated} />
         ) : (
           <div className="surface2" style={{ padding: 14 }}>
-            <div style={{ fontWeight: 900, marginBottom: 8 }}>Insights</div>
-            <div style={{ color: "rgba(255,255,255,0.62)" }}>Turn on “Live Layer” to view insights.</div>
+            <div style={{ fontWeight: 950, marginBottom: 8 }}>Insights</div>
+            <div className="muted">Turn on “Live Layer” to view insights.</div>
           </div>
         )}
       </div>
 
-      <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,0.62)" }}>
+      <div style={{ marginTop: 12, fontSize: 12 }} className="muted2">
         Loaded: {monthly?.loaded_file ? String(monthly.loaded_file) : "—"} • Stats rows: {monthlyStats?.total_rows ?? "—"}
       </div>
     </div>

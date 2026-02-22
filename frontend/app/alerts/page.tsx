@@ -17,18 +17,14 @@ export default function AlertsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(`http://localhost:8000/alerts?since_hours=${hours}`, { cache: "no-store" }).then((x) =>
-        x.json()
-      );
+      const r = await fetch(`http://localhost:8000/alerts?since_hours=${hours}`, { cache: "no-store" }).then((x) => x.json());
       setData(r);
     } finally {
       setLoading(false);
     }
   }, [hours]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     const id = setInterval(load, 60_000);
@@ -37,69 +33,59 @@ export default function AlertsPage() {
 
   const lastUpdated = useMemo(() => {
     if (!data?.last_updated) return "—";
-    try {
-      return new Date(data.last_updated).toLocaleString();
-    } catch {
-      return String(data.last_updated);
-    }
+    try { return new Date(data.last_updated).toLocaleString(); } catch { return String(data.last_updated); }
   }, [data]);
 
   return (
-    <div style={{ padding: 18, fontFamily: "sans-serif", background: "#f8fafc", minHeight: "100vh" }}>
+    <div>
       <NavBar />
+
+      <div className="surface" style={{ padding: 16, marginBottom: 12 }}>
+        <div className="row space" style={{ flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 950 }}>Alerts</div>
+            <div className="muted">Live calls are unverified. Use as awareness.</div>
+          </div>
+          <Pill>Window: {hours}h</Pill>
+        </div>
+      </div>
 
       <Card
         title="Live Alerts"
-        right={<Pill>Window: {hours}h</Pill>}
+        right={
+          <LiveWindowToggle
+            value={since}
+            onChange={setSince}
+            right={
+              <Button variant="primary" onClick={load} disabled={loading}>
+                {loading ? "Refreshing..." : "Refresh"}
+              </Button>
+            }
+          />
+        }
       >
-        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10 }}>
-          Calls for Service (unverified). Last updated: <b>{lastUpdated}</b>
+        <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+          Last updated: <b style={{ color: "rgba(255,255,255,0.92)" }}>{lastUpdated}</b>
         </div>
 
-        <LiveWindowToggle
-          value={since}
-          onChange={setSince}
-          right={
-            <Button variant="primary" onClick={load} disabled={loading}>
-              {loading ? "Refreshing..." : "Refresh"}
-            </Button>
-          }
-        />
-
-        <div style={{ height: 12 }} />
-
-        <div style={{ padding: 12, borderRadius: 12, border: "1px solid #e5e7eb", background: "#fff" }}>
-          <b>Summary:</b> {data?.summary ?? "Loading..."}
+        <div className="surface" style={{ padding: 12, marginBottom: 12 }}>
+          <div style={{ fontWeight: 900, marginBottom: 6 }}>Summary</div>
+          <div className="muted">{data?.summary ?? "Loading..."}</div>
         </div>
-
-        <div style={{ height: 12 }} />
 
         <div style={{ display: "grid", gap: 10 }}>
           {(data?.items ?? []).map((c: any, i: number) => (
-            <div
-              key={i}
-              style={{
-                border: "1px solid #e5e7eb",
-                padding: 12,
-                borderRadius: 14,
-                background: "#fff",
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                alignItems: "flex-start",
-              }}
-            >
+            <div key={i} className="surface" style={{ padding: 12, borderRadius: 16, display: "flex", justifyContent: "space-between", gap: 12 }}>
               <div>
-                <div style={{ fontWeight: 800, color: "#0f172a" }}>{c.type}</div>
-                <div style={{ marginTop: 4, color: "#334155" }}>{c.location}</div>
-                <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>{c.time}</div>
+                <div style={{ fontWeight: 950 }}>{c.type}</div>
+                <div className="muted" style={{ marginTop: 4 }}>{c.location}</div>
+                <div className="muted2" style={{ marginTop: 6, fontSize: 12 }}>{c.time}</div>
               </div>
-
               <Pill>Live</Pill>
             </div>
           ))}
 
-          {!loading && (data?.items?.length ?? 0) === 0 && <div style={{ color: "#64748b" }}>No items for this window.</div>}
+          {!loading && (data?.items?.length ?? 0) === 0 && <div className="muted">No items for this window.</div>}
         </div>
       </Card>
     </div>

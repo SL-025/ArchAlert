@@ -22,3 +22,10 @@ backend/.venv/
 frontend/.venv/
 venv/
 ENV/
+
+# Python virtualenvs
+.venv/
+venv/
+ENV/
+backend/.venv/
+frontend/.venv/

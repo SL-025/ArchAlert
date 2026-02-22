@@ -3,32 +3,35 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export default function NavBar() {
-  const path = usePathname();
-
-  const Item = ({ href, label }: { href: string; label: string }) => (
-    <Link
-      href={href}
-      style={{
-        padding: "8px 10px",
-        borderRadius: 10,
-        textDecoration: "none",
-        color: path === href ? "#fff" : "#0f172a",
-        background: path === href ? "#0f172a" : "transparent",
-        border: "1px solid #e5e7eb",
-      }}
-    >
+function NavItem({ href, label }: { href: string; label: string }) {
+  const pathname = usePathname();
+  const active = pathname === href;
+  return (
+    <Link className={`navLink ${active ? "navLinkActive" : ""}`} href={href}>
       {label}
     </Link>
   );
+}
 
+export default function NavBar() {
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
-      <div style={{ fontWeight: 800, marginRight: 10 }}>ArchAlert</div>
-      <Item href="/" label="Dashboard" />
-      <Item href="/trends" label="Trends" />
-      <Item href="/alerts" label="Alerts" />
-      <Item href="/about" label="About" />
+    <div className="surface" style={{ padding: 14, marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+        <div className="brand">
+          <div className="brandMark" />
+          <div>
+            <div style={{ fontSize: 16 }}>ArchAlert</div>
+            <div className="kicker">Urban safety awareness</div>
+          </div>
+        </div>
+
+        <div className="navPill" style={{ flexWrap: "wrap" }}>
+          <NavItem href="/" label="Dashboard" />
+          <NavItem href="/trends" label="Trends" />
+          <NavItem href="/alerts" label="Alerts" />
+          <NavItem href="/about" label="About" />
+        </div>
+      </div>
     </div>
   );
 }

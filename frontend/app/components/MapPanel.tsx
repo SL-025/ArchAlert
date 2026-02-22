@@ -57,29 +57,10 @@ export default function MapPanel({
       }
 
       const latRaw =
-        c.lat ??
-        c.latitude ??
-        c.y ??
-        c.center_lat ??
-        c.centroid_lat ??
-        c.lat_center ??
-        c.cell_lat ??
-        (Array.isArray(c.center) ? c.center[0] : undefined);
+        c.lat ?? c.latitude ?? c.y ?? c.center_lat ?? c.centroid_lat ?? c.lat_center ?? c.cell_lat ?? (Array.isArray(c.center) ? c.center[0] : undefined);
 
       const lngRaw =
-        c.lng ??
-        c.lon ??
-        c.long ??
-        c.longitude ??
-        c.x ??
-        c.center_lng ??
-        c.center_lon ??
-        c.centroid_lng ??
-        c.centroid_lon ??
-        c.lng_center ??
-        c.lon_center ??
-        c.cell_lng ??
-        (Array.isArray(c.center) ? c.center[1] : undefined);
+        c.lng ?? c.lon ?? c.long ?? c.longitude ?? c.x ?? c.center_lng ?? c.center_lon ?? c.centroid_lng ?? c.centroid_lon ?? c.lng_center ?? c.lon_center ?? c.cell_lng ?? (Array.isArray(c.center) ? c.center[1] : undefined);
 
       const lat = toNum(latRaw);
       const lng = toNum(lngRaw);
@@ -114,58 +95,37 @@ export default function MapPanel({
     });
 
     const items = [...rects, ...points];
-
     let max = 1;
     for (const e of items) max = Math.max(max, e.value || 0);
 
-    return { items, max, rawPoints: pointsRaw.length, binnedPoints: points.length };
+    return { items, max };
   }, [monthlyCells]);
 
   const center: [number, number] = [38.627, -90.1994];
 
   const colorFor = (v: number, max: number) => {
     const t = Math.max(0, Math.min(1, v / Math.max(1, max)));
-    const stops = ["#e0f2fe", "#bae6fd", "#7dd3fc", "#38bdf8", "#0ea5e9", "#0284c7", "#075985"];
+    const stops = ["#dbeafe", "#bfdbfe", "#93c5fd", "#60a5fa", "#3b82f6", "#2563eb", "#1e40af"];
     const idx = Math.min(stops.length - 1, Math.floor(t * (stops.length - 1)));
     return stops[idx];
   };
 
   const styleRect = (v: number) => {
     const fill = colorFor(v, normalized.max);
-    const alpha = Math.min(0.55, 0.12 + (v / Math.max(1, normalized.max)) * 0.45);
+    const alpha = Math.min(0.50, 0.10 + (v / Math.max(1, normalized.max)) * 0.45);
     return { color: fill, weight: 1, fillColor: fill, fillOpacity: alpha } as const;
   };
 
   const showEmpty = !showHistorical || normalized.items.length === 0;
 
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, background: "#fff" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+    <div className="surface2" style={{ padding: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div>
-          <h3 style={{ margin: 0 }}>Map</h3>
-          <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
-            Historical heat layer {showHistorical ? "ON" : "OFF"} • Raw points: {normalized.rawPoints} → Binned:{" "}
-            {normalized.binnedPoints}
-          </div>
+          <div style={{ fontWeight: 950 }}>Map</div>
+          <div className="muted2" style={{ fontSize: 12, marginTop: 6 }}>Historical heat layer {showHistorical ? "ON" : "OFF"}</div>
         </div>
-
-        <div
-          style={{
-            fontSize: 12,
-            padding: "6px 10px",
-            borderRadius: 999,
-            border: "1px solid #e5e7eb",
-            background: "#f8fafc",
-            color: "#0f172a",
-            maxWidth: 360,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-          title={mapKey}
-        >
-          Active: {mapKey}
-        </div>
+        <div className="badge" title={mapKey}>Active: {mapKey}</div>
       </div>
 
       <div style={{ marginTop: 12 }}>
@@ -173,9 +133,9 @@ export default function MapPanel({
           key={mapKey}
           style={{
             height: 520,
-            borderRadius: 12,
+            borderRadius: 16,
             overflow: "hidden",
-            border: "1px solid #e5e7eb",
+            border: "1px solid rgba(255,255,255,0.14)",
             position: "relative",
           }}
         >
@@ -188,7 +148,7 @@ export default function MapPanel({
                   return <Rectangle key={`r-${idx}`} bounds={it.bounds} pathOptions={styleRect(it.value)} />;
                 }
                 const fill = colorFor(it.value, normalized.max);
-                const alpha = Math.min(0.75, 0.18 + (it.value / Math.max(1, normalized.max)) * 0.55);
+                const alpha = Math.min(0.72, 0.18 + (it.value / Math.max(1, normalized.max)) * 0.52);
                 return (
                   <CircleMarker
                     key={`p-${idx}`}
@@ -206,20 +166,19 @@ export default function MapPanel({
               right: 12,
               bottom: 12,
               zIndex: 9999,
-              background: "rgba(255,255,255,0.96)",
-              border: "1px solid #e5e7eb",
-              borderRadius: 12,
+              background: "rgba(10,16,32,0.92)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              borderRadius: 14,
               padding: 10,
-              width: 190,
+              width: 200,
+              color: "rgba(255,255,255,0.86)",
+              backdropFilter: "blur(10px)",
             }}
           >
-            <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8, color: "#0f172a" }}>Legend</div>
+            <div style={{ fontWeight: 950, fontSize: 12, marginBottom: 8 }}>Legend</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 14, height: 10, background: "#0ea5e9", borderRadius: 3, border: "1px solid #e5e7eb" }} />
-              <div style={{ fontSize: 12, color: "#334155" }}>Historical intensity</div>
-            </div>
-            <div style={{ marginTop: 8, fontSize: 11, color: "#64748b", lineHeight: 1.35 }}>
-              Points are aggregated into bins to reduce clutter.
+              <div style={{ width: 14, height: 10, background: "#60a5fa", borderRadius: 4, border: "1px solid rgba(255,255,255,0.18)" }} />
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.70)" }}>Historical intensity</div>
             </div>
           </div>
 
@@ -230,9 +189,9 @@ export default function MapPanel({
                 inset: 0,
                 display: "grid",
                 placeItems: "center",
-                background: "rgba(255,255,255,0.92)",
-                color: "#64748b",
-                fontWeight: 700,
+                background: "rgba(10,16,32,0.75)",
+                color: "rgba(255,255,255,0.75)",
+                fontWeight: 900,
                 zIndex: 9998,
               }}
             >
