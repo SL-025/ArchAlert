@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import os
 import glob
 import re
+from datetime import timedelta
 
 app = FastAPI()
 
@@ -178,47 +179,82 @@ def grid_cell(lat: float, lng: float, precision: int = 3):
 
 # --- Live calls scraping ---
 def fetch_live_calls():
-    html = requests.get(LIVE_URL, timeout=20).text
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+
+    resp = requests.get(LIVE_URL, headers=headers, timeout=25)
+    resp.raise_for_status()
+    html = resp.text
 
     calls = []
-    # Try pandas read_html first (more robust)
+
+    # 1) Try pandas read_html (often easiest if table is standard)
     try:
         tables = pd.read_html(html)
-        df = tables[0].fillna("")
-        for _, row in df.iterrows():
-            cols = list(row.values)
-            if len(cols) >= 3:
-                calls.append(
-                    {
-                        "time": str(cols[0]),
-                        "type": str(cols[1]),
-                        "location": str(cols[2]),
+        if tables:
+            df = tables[0].fillna("")
+            for _, row in df.iterrows():
+                cols = list(row.values)
+                if len(cols) >= 4:
+                    calls.append({
+                        "time": str(cols[0]).strip(),
+                        "event": str(cols[1]).strip(),
+                        "location": str(cols[2]).strip(),
+                        "type": str(cols[3]).strip(),
                         "source": "SLMPD Calls for Service (unverified)",
-                    }
-                )
+                    })
     except Exception:
-        # Fallback to basic BeautifulSoup
+        pass
+
+    # 2) Fallback: BeautifulSoup parse
+    if not calls:
         soup = BeautifulSoup(html, "html.parser")
         table = soup.find("table")
         if table:
             rows = table.find_all("tr")
             for r in rows[1:]:
                 cols = [c.get_text(" ", strip=True) for c in r.find_all(["td", "th"])]
-                if len(cols) >= 3:
-                    calls.append(
-                        {
-                            "time": cols[0],
-                            "type": cols[1],
-                            "location": cols[2],
-                            "source": "SLMPD Calls for Service (unverified)",
-                        }
-                    )
+                if len(cols) >= 4:
+                    calls.append({
+                        "time": cols[0],
+                        "event": cols[1],
+                        "location": cols[2],
+                        "type": cols[3],
+                        "source": "SLMPD Calls for Service (unverified)",
+                    })
 
     cache["live_calls"] = calls[:500]
-    cache["live_last_updated"] = (
-        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    )
+    cache["live_last_updated"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
+def parse_live_dt(time_str: str):
+    """
+    Best-effort parse for SLMPD live 'time' strings.
+    Returns pandas.Timestamp or NaT.
+    """
+    if time_str is None:
+        return pd.NaT
+    s = str(time_str).strip()
+
+    # normalize whitespace
+    s = re.sub(r"\s+", " ", s)
+
+    # try common formats first, then fallback to pandas inference
+    for fmt in [
+        "%Y-%m-%d %H:%M:%S",
+        "%m/%d/%Y %H:%M",
+        "%m/%d/%Y %I:%M %p",
+        "%m/%d/%y %H:%M",
+        "%m/%d/%y %I:%M %p",
+    ]:
+        try:
+            return pd.to_datetime(s, format=fmt)
+        except Exception:
+            pass
+
+    # last resort: let pandas infer
+    return pd.to_datetime(s, errors="coerce")
 
 @app.on_event("startup")
 def startup():
@@ -403,3 +439,58 @@ def alerts():
         "summary": summary,
         "items": cache["live_calls"][:50],
     }
+
+@app.get("/live-hourly")
+def live_hourly(since_hours: int = 24):
+    try:
+        fetch_live_calls()
+
+        df = pd.DataFrame(cache.get("live_calls", []))
+        if df.empty:
+            return {"since_hours": since_hours, "hourly": [], "error": "no live calls (live_calls empty)"}
+
+        if "time" not in df.columns:
+            return {"since_hours": since_hours, "hourly": [], "error": f"missing 'time' column. columns={list(df.columns)}"}
+
+        df["dt"] = df["time"].apply(parse_live_dt)
+        df = df.dropna(subset=["dt"])
+        if df.empty:
+            return {"since_hours": since_hours, "hourly": [], "error": "time parse failed (all dt are NaT)"}
+
+        max_dt = df["dt"].max()
+        cutoff = max_dt - pd.Timedelta(hours=int(since_hours))
+        df = df[df["dt"] >= cutoff]
+
+        df["hour_bucket"] = df["dt"].dt.floor("h")
+        g = df.groupby("hour_bucket").size().sort_index()
+
+        hourly = [{"hour": t.isoformat(), "count": int(c)} for t, c in g.items()]
+        return {"since_hours": since_hours, "last_updated": cache.get("live_last_updated"), "hourly": hourly}
+
+    except Exception as e:
+        return {"since_hours": since_hours, "hourly": [], "error": f"EXCEPTION: {type(e).__name__}: {e}"}
+
+@app.get("/live-types")
+def live_types(since_hours: int = 24, top_n: int = 10):
+    fetch_live_calls()
+
+    df = pd.DataFrame(cache["live_calls"])
+    if df.empty or "time" not in df.columns:
+        return {"since_hours": since_hours, "top_types": [], "error": "no live calls"}
+
+    df["dt"] = df["time"].apply(parse_live_dt)
+    df = df.dropna(subset=["dt"])
+    if df.empty:
+        return {"since_hours": since_hours, "top_types": [], "error": "time parse failed"}
+
+    max_dt = df["dt"].max()
+    cutoff = max_dt - pd.Timedelta(hours=since_hours)
+    df = df[df["dt"] >= cutoff]
+
+    if "type" not in df.columns:
+        return {"since_hours": since_hours, "top_types": [], "error": "no type column"}
+
+    vc = df["type"].fillna("UNKNOWN").astype(str).value_counts().head(int(top_n))
+    top_types = [{"type": str(k), "count": int(v)} for k, v in vc.items()]
+
+    return {"since_hours": since_hours, "last_updated": cache["live_last_updated"], "top_types": top_types}
