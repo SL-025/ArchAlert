@@ -29,3 +29,4 @@ venv/
 ENV/
 backend/.venv/
 frontend/.venv/
+backend/.venv/
