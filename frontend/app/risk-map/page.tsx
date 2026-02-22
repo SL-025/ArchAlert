@@ -134,8 +134,9 @@ function colorFor(v: number, max: number) {
 
 export default function RiskMapPage() {
   const sp = useSearchParams();
-  const q = sp.get("q") || "Where are the hotspots right now?";
-  const sinceHours = sinceToHours(sp.get("since_hours") || "6");
+
+  const q = sp?.get("q") ?? "Where are the hotspots right now?";
+  const sinceHours = sinceToHours(sp?.get("since_hours") ?? "6");
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
