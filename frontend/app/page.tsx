@@ -2,32 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+
 import NavBar from "./components/NavBar";
 import Filters from "./components/Filters";
-import Insights from "./components/Insights";
 import KpiCards from "./components/KpiCards";
-import RiskAssistant from "./components/RiskAssistant";
+import Insights from "./components/Insights";
 import { apiUrl } from "./lib/api";
 
-// ✅ IMPORTANT: Leaflet/react-leaflet components must NOT be imported during SSR
+// ✅ Leaflet must never SSR
 const MapPanel = dynamic(() => import("./components/MapPanel"), {
   ssr: false,
-  loading: () => (
-    <div className="surface2" style={{ padding: 14, minHeight: 520, display: "grid", placeItems: "center" }}>
-      Loading map…
-    </div>
-  ),
-});
-
-// If you still use HeatMap somewhere on dashboard, keep this too.
-// (Safe even if you don’t render it currently.)
-const HeatMap = dynamic(() => import("./components/HeatMap"), {
-  ssr: false,
-  loading: () => (
-    <div className="surface2" style={{ padding: 14, minHeight: 520, display: "grid", placeItems: "center" }}>
-      Loading heatmap…
-    </div>
-  ),
+  loading: () => <div style={{ minHeight: 520 }} />,
 });
 
 type AnyCell = Record<string, any>;
@@ -53,48 +38,48 @@ export default function DashboardPage() {
   ]);
 
   const [monthlyCells, setMonthlyCells] = useState<AnyCell[]>([]);
+
   const [liveTotal, setLiveTotal] = useState<number>(0);
-  const [topType, setTopType] = useState<string>("—");
+  const [topTypes, setTopTypes] = useState<any[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
-  const [loadingHist, setLoadingHist] = useState(false);
-  const [loadingLive, setLoadingLive] = useState(false);
-
+  // forces map remount when filters change (also helps Leaflet dev quirks)
   const mapKey = useMemo(() => {
-    // forces MapPanel remount when filters change (handy during demos)
-    return `${showHistorical ? "H1" : "H0"}-${monthMode}-${selectedMonth}-${monthsBack}-${lastDays}-${yearRangeUiOnly}`;
-  }, [showHistorical, monthMode, selectedMonth, monthsBack, lastDays, yearRangeUiOnly]);
+    return `${monthMode}-${selectedMonth}-${monthsBack}-${lastDays}-${showHistorical}-${showLive}-${since}`;
+  }, [monthMode, selectedMonth, monthsBack, lastDays, showHistorical, showLive, since]);
 
-  const onRefreshLive = async () => {
+  const refreshLive = async () => {
     if (!showLive) return;
-    setLoadingLive(true);
-    try {
-      // These endpoints must match your backend. Keep the same ones you already implemented.
-      const meta = await fetch(apiUrl(`/live-meta?since=${since}`), { cache: "no-store" }).then((r) => r.json());
 
-      setLiveTotal(Number(meta?.total ?? meta?.live_total ?? 0) || 0);
-      setTopType(String(meta?.top_type ?? meta?.topType ?? "—"));
+    try {
+      // keep your endpoints (adjust only if your backend names differ)
+      const meta = await fetch(apiUrl(`/meta?since=${since}`), { cache: "no-store" }).then((r) => r.json());
+      const typesRes = await fetch(apiUrl(`/live-types?since=${since}`), { cache: "no-store" }).then((r) => r.json());
+
+      setLiveTotal(Number(meta?.live_total ?? meta?.total ?? 0) || 0);
       setLastUpdated(String(meta?.last_updated ?? meta?.lastUpdated ?? ""));
+
+      // Accept both formats: [[type,count],...] OR [{type,count},...]
+      const raw = typesRes?.top_types ?? typesRes?.types ?? [];
+      if (Array.isArray(raw) && raw.length && Array.isArray(raw[0])) {
+        setTopTypes(raw);
+      } else {
+        setTopTypes((raw ?? []).map((x: any) => [String(x.type ?? x[0] ?? "—"), Number(x.count ?? x[1] ?? 0)]));
+      }
     } catch {
-      // Don’t crash UI if backend is down
       setLiveTotal(0);
-      setTopType("—");
+      setTopTypes([]);
       setLastUpdated("");
-    } finally {
-      setLoadingLive(false);
     }
   };
 
-  const onRefreshHistorical = async () => {
+  const refreshHistorical = async () => {
     if (!showHistorical) {
       setMonthlyCells([]);
       return;
     }
 
-    setLoadingHist(true);
     try {
-      // Use the same endpoint you already used for historical cells.
-      // If your backend expects different params, keep your params but keep apiUrl().
       const url =
         monthMode === "single"
           ? apiUrl(`/monthly-heat?month=${encodeURIComponent(selectedMonth)}`)
@@ -102,29 +87,24 @@ export default function DashboardPage() {
 
       const res = await fetch(url, { cache: "no-store" }).then((r) => r.json());
 
-      // Accept both: { cells: [...] } or just [...]
       const cells = Array.isArray(res) ? res : Array.isArray(res?.cells) ? res.cells : [];
       setMonthlyCells(cells);
 
-      // Optional: if backend returns available months
       if (Array.isArray(res?.available_months) && res.available_months.length) {
         setAvailableMonths(res.available_months.map((x: any) => String(x)));
       }
     } catch {
       setMonthlyCells([]);
-    } finally {
-      setLoadingHist(false);
     }
   };
 
-  // initial load
   useEffect(() => {
-    onRefreshLive();
+    refreshLive();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [since, showLive]);
 
   useEffect(() => {
-    onRefreshHistorical();
+    refreshHistorical();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showHistorical, monthMode, selectedMonth, monthsBack, lastDays]);
 
@@ -132,7 +112,19 @@ export default function DashboardPage() {
     <div style={{ padding: 14 }}>
       <NavBar />
 
-      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 14, alignItems: "start" }}>
+      {/* KPI row (full width) */}
+      <KpiCards
+        monthlyCellCount={Array.isArray(monthlyCells) ? monthlyCells.length : 0}
+        liveTotal={liveTotal}
+        topType={String(topTypes?.[0]?.[0] ?? "—")}
+        lastUpdated={lastUpdated}
+      />
+
+      <div style={{ height: 14 }} />
+
+      {/* ✅ EXACT UI: Filters | Map | Insights */}
+      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr 420px", gap: 14, alignItems: "start" }}>
+        {/* LEFT */}
         <div style={{ display: "grid", gap: 14 }}>
           <Filters
             since={since}
@@ -141,7 +133,7 @@ export default function DashboardPage() {
             setShowHistorical={setShowHistorical}
             showLive={showLive}
             setShowLive={setShowLive}
-            onRefreshLive={onRefreshLive}
+            onRefreshLive={refreshLive}
             monthMode={monthMode}
             setMonthMode={setMonthMode}
             selectedMonth={selectedMonth}
@@ -154,32 +146,16 @@ export default function DashboardPage() {
             setYearRangeUiOnly={setYearRangeUiOnly}
             availableMonths={availableMonths}
           />
-
-          <RiskAssistant since={since} />
-
-          <Insights />
         </div>
 
+        {/* CENTER */}
         <div style={{ display: "grid", gap: 14 }}>
-          <KpiCards
-            monthlyCellCount={Array.isArray(monthlyCells) ? monthlyCells.length : 0}
-            liveTotal={liveTotal}
-            topType={topType}
-            lastUpdated={lastUpdated}
-          />
-
-          {/* ✅ Leaflet is only loaded on client now */}
           <MapPanel monthlyCells={monthlyCells} showHistorical={showHistorical} mapKey={mapKey} />
+        </div>
 
-          {/* If you also render HeatMap on dashboard, render it here (optional):
-              <HeatMap cells={...} />
-          */}
-
-          {(loadingHist || loadingLive) && (
-            <div className="muted2" style={{ fontSize: 12, paddingLeft: 6 }}>
-              {loadingHist ? "Loading historical…" : null} {loadingLive ? "Loading live…" : null}
-            </div>
-          )}
+        {/* RIGHT */}
+        <div style={{ display: "grid", gap: 14 }}>
+          <Insights liveTotal={liveTotal} topTypes={topTypes} lastUpdated={lastUpdated} since={since} />
         </div>
       </div>
     </div>
