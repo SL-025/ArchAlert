@@ -5,6 +5,8 @@ import KpiCards from "./components/KpiCards";
 import Filters from "./components/Filters";
 import MapPanel from "./components/MapPanel";
 import Insights from "./components/Insights";
+import NavBar from "./components/NavBar";
+
 
 export default function Home() {
   const [meta, setMeta] = useState<any>(null);
@@ -43,7 +45,7 @@ export default function Home() {
           AI‑Powered Urban Safety Awareness (St. Louis) • Calls for Service are unverified • Not predictive policing
         </div>
       </div>
-
+      <NavBar />
       <KpiCards
         monthlyCellCount={monthlyCells.length}
         liveTotal={liveTotal}
@@ -61,7 +63,7 @@ export default function Home() {
           setShowLive={setShowLive}
           onRefreshLive={loadAll}
         />
-
+        
         <MapPanel monthlyCells={monthlyCells} showHistorical={showHistorical} />
 
         {showLive ? (

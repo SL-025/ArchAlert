@@ -115,3 +115,62 @@ def live_summary():
         by_type[t] = by_type.get(t, 0) + 1
     top = sorted(by_type.items(), key=lambda x: x[1], reverse=True)[:10]
     return {"last_updated": cache["live_last_updated"], "top_types": top, "total": len(cache["live_calls"])}
+
+@app.get("/monthly-stats")
+def monthly_stats():
+    df = pd.read_csv(MONTH_FILE)
+
+    # Try to find a datetime column (adjust after you inspect df.columns)
+    time_candidates = [c for c in df.columns if "date" in c.lower() or "time" in c.lower()]
+    time_col = time_candidates[0] if time_candidates else None
+
+    # Crime/category column (adjust if needed)
+    type_candidates = [c for c in df.columns if "offense" in c.lower() or "crime" in c.lower() or "type" in c.lower()]
+    type_col = type_candidates[0] if type_candidates else None
+
+    if time_col:
+        dt = pd.to_datetime(df[time_col], errors="coerce")
+        hours = dt.dt.hour.fillna(-1).astype(int)
+        hour_counts = hours[hours >= 0].value_counts().sort_index()
+        hour_series = [{"hour": int(h), "count": int(c)} for h, c in hour_counts.items()]
+    else:
+        hour_series = []
+
+    if type_col:
+        top_types = df[type_col].fillna("UNKNOWN").astype(str).value_counts().head(10)
+        type_series = [{"type": str(t), "count": int(c)} for t, c in top_types.items()]
+    else:
+        type_series = []
+
+    return {
+        "month": "2026-01",
+        "total_rows": int(len(df)),
+        "hour_series": hour_series,
+        "type_series": type_series,
+        "columns": list(df.columns),
+        "used_time_col": time_col,
+        "used_type_col": type_col,
+    }
+
+@app.get("/alerts")
+def alerts():
+    fetch_live_calls()
+    total = len(cache["live_calls"])
+    by_type = {}
+    for c in cache["live_calls"]:
+        by_type[c["type"]] = by_type.get(c["type"], 0) + 1
+    top = sorted(by_type.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_label = top[0][0] if top else "—"
+
+    summary = (
+        f"Live calls are currently dominated by {top_label}. "
+        f"This is a real-time awareness view (calls are unverified)."
+    )
+
+    return {
+        "last_updated": cache["live_last_updated"],
+        "total": total,
+        "top_types": top,
+        "summary": summary,
+        "items": cache["live_calls"][:50],  # show latest 50 in UI
+    }
