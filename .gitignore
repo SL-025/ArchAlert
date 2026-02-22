@@ -8,3 +8,10 @@ backend/.venv/
 .venv/
 backend/.venv/
 frontend/.venv/
+
+# Ignore virtual envs
+.venv/
+backend/.venv/
+frontend/.venv/
+venv/
+ENV/

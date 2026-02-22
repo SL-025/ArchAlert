@@ -5,7 +5,6 @@ import { MapContainer, TileLayer, Rectangle, CircleMarker } from "react-leaflet"
 import "leaflet/dist/leaflet.css";
 
 type AnyCell = Record<string, any>;
-type LivePoint = { lat: number; lng: number; type?: string; time?: string; location?: string };
 
 type DrawItem =
   | { kind: "rect"; bounds: [[number, number], [number, number]]; value: number }
@@ -14,14 +13,10 @@ type DrawItem =
 export default function MapPanel({
   monthlyCells,
   showHistorical,
-  showLive,
-  livePoints,
   mapKey,
 }: {
   monthlyCells: AnyCell[];
   showHistorical: boolean;
-  showLive: boolean;
-  livePoints: LivePoint[];
   mapKey: string;
 }) {
   const normalized = useMemo(() => {
@@ -35,8 +30,7 @@ export default function MapPanel({
     };
 
     for (const c of cells) {
-      const vRaw =
-        c.count ?? c.value ?? c.weight ?? c.n ?? c.total ?? c.intensity ?? c.incidents ?? 0;
+      const vRaw = c.count ?? c.value ?? c.weight ?? c.n ?? c.total ?? c.intensity ?? c.incidents ?? 0;
       const value = Number(vRaw) || 0;
 
       const minLat = c.min_lat ?? c.south ?? c.sw_lat ?? c.lat_min ?? c.ymin;
@@ -95,7 +89,6 @@ export default function MapPanel({
       }
     }
 
-    // Bin points to reduce clutter
     const BIN = 0.003;
     const keyFor = (lat: number, lng: number) => `${Math.round(lat / BIN) * BIN}|${Math.round(lng / BIN) * BIN}`;
 
@@ -125,7 +118,7 @@ export default function MapPanel({
     let max = 1;
     for (const e of items) max = Math.max(max, e.value || 0);
 
-    return { items, max };
+    return { items, max, rawPoints: pointsRaw.length, binnedPoints: points.length };
   }, [monthlyCells]);
 
   const center: [number, number] = [38.627, -90.1994];
@@ -143,8 +136,7 @@ export default function MapPanel({
     return { color: fill, weight: 1, fillColor: fill, fillOpacity: alpha } as const;
   };
 
-  const showEmptyHist = !showHistorical || normalized.items.length === 0;
-  const liveOk = showLive && Array.isArray(livePoints) && livePoints.length > 0;
+  const showEmpty = !showHistorical || normalized.items.length === 0;
 
   return (
     <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, background: "#fff" }}>
@@ -152,7 +144,8 @@ export default function MapPanel({
         <div>
           <h3 style={{ margin: 0 }}>Map</h3>
           <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
-            Historical: {showHistorical ? "ON" : "OFF"} • Live overlay: {showLive ? (liveOk ? "ON" : "NO COORDS") : "OFF"}
+            Historical heat layer {showHistorical ? "ON" : "OFF"} • Raw points: {normalized.rawPoints} → Binned:{" "}
+            {normalized.binnedPoints}
           </div>
         </div>
 
@@ -189,8 +182,7 @@ export default function MapPanel({
           <MapContainer center={center} zoom={11} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
             <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-            {/* Historical */}
-            {!showEmptyHist &&
+            {!showEmpty &&
               normalized.items.map((it, idx) => {
                 if (it.kind === "rect") {
                   return <Rectangle key={`r-${idx}`} bounds={it.bounds} pathOptions={styleRect(it.value)} />;
@@ -206,20 +198,8 @@ export default function MapPanel({
                   />
                 );
               })}
-
-            {/* Live overlay (green) */}
-            {liveOk &&
-              livePoints.slice(0, 700).map((p, i) => (
-                <CircleMarker
-                  key={`live-${i}`}
-                  center={[Number(p.lat), Number(p.lng)]}
-                  radius={4}
-                  pathOptions={{ color: "#16a34a", fillColor: "#16a34a", fillOpacity: 0.75, weight: 1 }}
-                />
-              ))}
           </MapContainer>
 
-          {/* Legend */}
           <div
             style={{
               position: "absolute",
@@ -234,25 +214,16 @@ export default function MapPanel({
             }}
           >
             <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8, color: "#0f172a" }}>Legend</div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 14, height: 10, background: "#0ea5e9", borderRadius: 3, border: "1px solid #e5e7eb" }} />
               <div style={{ fontSize: 12, color: "#334155" }}>Historical intensity</div>
             </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 10, height: 10, background: "#16a34a", borderRadius: 999, border: "1px solid #e5e7eb" }} />
-              <div style={{ fontSize: 12, color: "#334155" }}>Live calls (if coords)</div>
+            <div style={{ marginTop: 8, fontSize: 11, color: "#64748b", lineHeight: 1.35 }}>
+              Points are aggregated into bins to reduce clutter.
             </div>
-
-            {!liveOk && showLive && (
-              <div style={{ marginTop: 8, fontSize: 11, color: "#64748b", lineHeight: 1.35 }}>
-                Live overlay needs lat/lng in feed.
-              </div>
-            )}
           </div>
 
-          {showEmptyHist && showHistorical && (
+          {showEmpty && (
             <div
               style={{
                 position: "absolute",
@@ -265,7 +236,7 @@ export default function MapPanel({
                 zIndex: 9998,
               }}
             >
-              Loading / No historical cells…
+              {showHistorical ? "Loading / No historical cells..." : "Historical layer is OFF"}
             </div>
           )}
         </div>

@@ -32,6 +32,36 @@ function fmtTimeLabel(iso: string) {
   }
 }
 
+function truncateLabel(s: string, max = 18) {
+  const t = (s ?? "").toString().trim();
+  if (t.length <= max) return t;
+  return t.slice(0, max - 1) + "…";
+}
+
+/** ✅ Custom tick so X-axis labels don't collide / vanish */
+function CustomTypeTick(props: any) {
+  const { x, y, payload } = props;
+  const full = String(payload?.value ?? "");
+  const short = truncateLabel(full, 20);
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={12}
+        textAnchor="end"
+        fill="#334155"
+        fontSize={11}
+        transform="rotate(-25)"
+      >
+        {short}
+        <title>{full}</title>
+      </text>
+    </g>
+  );
+}
+
 export default function TrendsPage() {
   // ✅ shared live window
   const { since, setSince } = useLiveWindow("6h");
@@ -45,11 +75,11 @@ export default function TrendsPage() {
   const [histStats, setHistStats] = useState<any>(null);
 
   const loadLive = async () => {
-    const h = await fetch(`http://localhost:8000/live-hourly?since_hours=${liveHours}`, { cache: "no-store" }).then((r) =>
-      r.json()
+    const h = await fetch(`http://localhost:8000/live-hourly?since_hours=${liveHours}`, { cache: "no-store" }).then(
+      (r) => r.json()
     );
-    const t = await fetch(`http://localhost:8000/live-types?since_hours=${liveHours}`, { cache: "no-store" }).then((r) =>
-      r.json()
+    const t = await fetch(`http://localhost:8000/live-types?since_hours=${liveHours}`, { cache: "no-store" }).then(
+      (r) => r.json()
     );
     setLiveHourly(h);
     setLiveTypes(t);
@@ -87,6 +117,15 @@ export default function TrendsPage() {
     }));
   }, [liveHourly]);
 
+  // ✅ Expect live-types to be either [{type,count}] OR [["TYPE",count]]
+  const liveTypesData = useMemo(() => {
+    const raw = liveTypes?.top_types ?? [];
+    if (Array.isArray(raw) && raw.length && Array.isArray(raw[0])) {
+      return raw.map((row: any) => ({ type: String(row[0]), count: Number(row[1]) || 0 }));
+    }
+    return (raw as any[]).map((x) => ({ type: String(x.type), count: Number(x.count) || 0 }));
+  }, [liveTypes]);
+
   const histHourlyData = useMemo(() => {
     const raw = (histStats?.hour_series ?? []) as { hour: number; count: number }[];
     const map = new Map<number, number>();
@@ -98,6 +137,14 @@ export default function TrendsPage() {
   }, [histStats]);
 
   const histHasHourly = Boolean(histStats?.hour_series?.length);
+
+  const histTypesData = useMemo(() => {
+    const raw = (histStats?.type_series ?? []) as any[];
+    return raw.map((x) => ({
+      type: String(x.type ?? x[0] ?? ""),
+      count: Number(x.count ?? x[1] ?? 0) || 0,
+    }));
+  }, [histStats]);
 
   const Btn = ({ label, val }: { label: string; val: "1h" | "6h" | "24h" }) => {
     const active = since === val;
@@ -139,7 +186,15 @@ export default function TrendsPage() {
             <Btn label="24h" val="24h" />
             <button
               onClick={loadLive}
-              style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #e5e7eb", background: "#2563eb", color: "#fff", cursor: "pointer", fontWeight: 700 }}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #e5e7eb",
+                background: "#2563eb",
+                color: "#fff",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
             >
               Refresh
             </button>
@@ -169,13 +224,18 @@ export default function TrendsPage() {
 
           <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
             <h4 style={{ marginTop: 0, marginBottom: 10 }}>Top live types</h4>
-            <div style={{ height: 280 }}>
+
+            {/* ✅ bigger bottom margin + custom tick */}
+            <div style={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={liveTypes?.top_types ?? []}>
+                <BarChart data={liveTypesData} margin={{ top: 10, right: 10, left: 0, bottom: 80 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="type" interval={0} angle={-35} textAnchor="end" height={90} tick={{ fontSize: 11 }} />
+                  <XAxis dataKey="type" interval={0} tick={<CustomTypeTick />} height={80} />
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(v: any) => [v, "Count"]}
+                    labelFormatter={(label: any) => String(label)}
+                  />
                   <Bar dataKey="count" fill="#0f172a" />
                 </BarChart>
               </ResponsiveContainer>
@@ -193,11 +253,7 @@ export default function TrendsPage() {
           </div>
 
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <select
-              value={histMonth}
-              onChange={(e) => setHistMonth(e.target.value)}
-              style={{ padding: 10, borderRadius: 10, border: "1px solid #e5e7eb" }}
-            >
+            <select value={histMonth} onChange={(e) => setHistMonth(e.target.value)} style={{ padding: 10, borderRadius: 10, border: "1px solid #e5e7eb" }}>
               <option value="September2025">September2025</option>
               <option value="October2025">October2025</option>
               <option value="November2025">November2025</option>
@@ -226,12 +282,7 @@ export default function TrendsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={histHourlyData}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="hour"
-                        tickFormatter={(v) => fmtHourLabel(Number(v))}
-                        interval={2}
-                        tick={{ fontSize: 11 }}
-                      />
+                      <XAxis dataKey="hour" tickFormatter={(v) => fmtHourLabel(Number(v))} interval={2} tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                       <Tooltip
                         formatter={(value: any) => [value, "Incidents"]}
@@ -254,13 +305,18 @@ export default function TrendsPage() {
 
             <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
               <h4 style={{ marginTop: 0, marginBottom: 10 }}>Top types (historical)</h4>
-              <div style={{ height: 280 }}>
+
+              {/* ✅ FIXED X-AXIS: custom ticks + bottom margin */}
+              <div style={{ height: 320 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={histStats?.type_series ?? []}>
+                  <BarChart data={histTypesData} margin={{ top: 10, right: 10, left: 0, bottom: 90 }}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="type" interval={0} angle={-35} textAnchor="end" height={90} tick={{ fontSize: 11 }} />
+                    <XAxis dataKey="type" interval={0} tick={<CustomTypeTick />} height={90} />
                     <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip />
+                    <Tooltip
+                      formatter={(v: any) => [v, "Count"]}
+                      labelFormatter={(label: any) => String(label)}
+                    />
                     <Bar dataKey="count" fill="#0f172a" />
                   </BarChart>
                 </ResponsiveContainer>

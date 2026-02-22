@@ -14,15 +14,15 @@ export default function Home() {
   const [monthlyStats, setMonthlyStats] = useState<any>(null);
   const [liveSummary, setLiveSummary] = useState<any>(null);
 
-  // ✅ GLOBAL live window (shared across pages)
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<string>("");
+
   const { since, setSince } = useLiveWindow("6h");
   const sinceToHours = (s: "1h" | "6h" | "24h") => (s === "1h" ? 1 : s === "6h" ? 6 : 24);
 
-  const [liveGeo, setLiveGeo] = useState<any>(null);
   const [showHistorical, setShowHistorical] = useState(true);
   const [showLive, setShowLive] = useState(true);
 
-  // historical filters
   const [monthMode, setMonthMode] = useState<"single" | "multi">("single");
   const [selectedMonth, setSelectedMonth] = useState("January2026");
   const [monthsBack, setMonthsBack] = useState(5);
@@ -30,40 +30,43 @@ export default function Home() {
   const [yearRangeUiOnly, setYearRangeUiOnly] = useState<1 | 3>(1);
 
   const loadAll = async () => {
-    const m = await fetch("http://localhost:8000/meta", { cache: "no-store" }).then((r) => r.json());
+    setLoadingAll(true);
+    try {
+      const m = await fetch("http://localhost:8000/meta", { cache: "no-store" }).then((r) => r.json());
 
-    const daysParam = lastDays ? `&last_days=${lastDays}` : "";
+      const daysParam = lastDays ? `&last_days=${lastDays}` : "";
 
-    const heatUrl =
-      monthMode === "single"
-        ? `http://localhost:8000/monthly-heat?month=${encodeURIComponent(selectedMonth)}${daysParam}`
-        : `http://localhost:8000/historical-heat?months=${monthsBack}${daysParam}`;
+      const heatUrl =
+        monthMode === "single"
+          ? `http://localhost:8000/monthly-heat?month=${encodeURIComponent(selectedMonth)}${daysParam}`
+          : `http://localhost:8000/historical-heat?months=${monthsBack}${daysParam}`;
 
-    const statsUrl = `http://localhost:8000/monthly-stats?month=${encodeURIComponent(selectedMonth)}${daysParam}`;
+      const statsUrl = `http://localhost:8000/monthly-stats?month=${encodeURIComponent(selectedMonth)}${daysParam}`;
 
-    const hours = sinceToHours(since);
-    const lg = await fetch(`http://localhost:8000/live-geo?since_hours=${hours}`, { cache: "no-store" }).then((r) => r.json());
-    setLiveGeo(lg);
+      const hours = sinceToHours(since);
 
-    const mh = await fetch(heatUrl, { cache: "no-store" }).then((r) => r.json());
-    const st = await fetch(statsUrl, { cache: "no-store" }).then((r) => r.json());
-    const ls = await fetch(`http://localhost:8000/live-summary?since_hours=${hours}`, { cache: "no-store" }).then((r) =>
-      r.json()
-    );
+      const mh = await fetch(heatUrl, { cache: "no-store" }).then((r) => r.json());
+      const st = await fetch(statsUrl, { cache: "no-store" }).then((r) => r.json());
+      const ls = await fetch(`http://localhost:8000/live-summary?since_hours=${hours}`, { cache: "no-store" }).then(
+        (r) => r.json()
+      );
 
-    setMeta(m);
-    setMonthly(mh);
-    setMonthlyStats(st);
-    setLiveSummary(ls);
+      setMeta(m);
+      setMonthly(mh);
+      setMonthlyStats(st);
+      setLiveSummary(ls);
+
+      setLastRefresh(new Date().toLocaleString());
+    } finally {
+      setLoadingAll(false);
+    }
   };
 
-  // reload when filters change (including live window)
   useEffect(() => {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthMode, selectedMonth, monthsBack, lastDays, since]);
 
-  // optional auto-refresh every 60s
   useEffect(() => {
     const id = setInterval(() => loadAll(), 60_000);
     return () => clearInterval(id);
@@ -85,6 +88,9 @@ export default function Home() {
         <h1 style={{ margin: 0 }}>ArchAlert</h1>
         <div style={{ color: "#64748b", marginTop: 6 }}>
           AI‑Powered Urban Safety Awareness • Calls for Service are unverified • Not predictive policing
+        </div>
+        <div style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>
+          {loadingAll ? "Refreshing dashboard..." : "Ready"} • Last refresh: <b>{lastRefresh || "—"}</b>
         </div>
       </div>
 
@@ -115,9 +121,7 @@ export default function Home() {
         <MapPanel
           monthlyCells={monthlyCells}
           showHistorical={showHistorical}
-          showLive={showLive}
-          livePoints={liveGeo?.items ?? []}
-          mapKey={`${monthMode}-${selectedMonth}-${monthsBack}-${lastDays}-${showHistorical}-${showLive}-${since}`}
+          mapKey={`${monthMode}-${selectedMonth}-${monthsBack}-${lastDays}-${showHistorical}`}
         />
 
         {showLive ? (
