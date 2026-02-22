@@ -5,3 +5,6 @@ backend/.venv/
 # Python venv
 backend/.venv/
 backend/.venv/
+.venv/
+backend/.venv/
+frontend/.venv/

@@ -256,6 +256,21 @@ def parse_live_dt(time_str: str):
     # last resort: let pandas infer
     return pd.to_datetime(s, errors="coerce")
 
+def live_df_filtered(since_hours: int):
+    fetch_live_calls()
+    df = pd.DataFrame(cache.get("live_calls", []))
+    if df.empty or "time" not in df.columns:
+        return df
+
+    df["dt"] = df["time"].apply(parse_live_dt)
+    df = df.dropna(subset=["dt"])
+    if df.empty:
+        return df
+
+    max_dt = df["dt"].max()
+    cutoff = max_dt - pd.Timedelta(hours=int(since_hours))
+    return df[df["dt"] >= cutoff].copy()
+
 @app.on_event("startup")
 def startup():
     fetch_live_calls()
@@ -414,37 +429,48 @@ def live_calls():
 
 
 @app.get("/live-summary")
-def live_summary():
-    fetch_live_calls()
-    by_type = {}
-    for c in cache["live_calls"]:
-        t = c["type"]
-        by_type[t] = by_type.get(t, 0) + 1
-    top = sorted(by_type.items(), key=lambda x: x[1], reverse=True)[:10]
-    return {"last_updated": cache["live_last_updated"], "top_types": top, "total": len(cache["live_calls"])}
+def live_summary(since_hours: int = 6, top_n: int = 10):
+    df = live_df_filtered(since_hours)
+    if df.empty:
+        return {"since_hours": since_hours, "last_updated": cache.get("live_last_updated"), "top_types": [], "total": 0}
+
+    if "type" not in df.columns:
+        return {"since_hours": since_hours, "last_updated": cache.get("live_last_updated"), "top_types": [], "total": int(len(df))}
+
+    vc = df["type"].fillna("UNKNOWN").astype(str).value_counts().head(int(top_n))
+    top = [[str(k), int(v)] for k, v in vc.items()]
+    return {"since_hours": since_hours, "last_updated": cache.get("live_last_updated"), "top_types": top, "total": int(len(df))}
 
 
 @app.get("/alerts")
-def alerts():
-    fetch_live_calls()
-    total = len(cache["live_calls"])
-    by_type = {}
-    for c in cache["live_calls"]:
-        by_type[c["type"]] = by_type.get(c["type"], 0) + 1
-    top = sorted(by_type.items(), key=lambda x: x[1], reverse=True)[:5]
+def alerts(since_hours: int = 6):
+    df = live_df_filtered(since_hours)
+    if df.empty:
+        return {
+            "since_hours": since_hours,
+            "last_updated": cache.get("live_last_updated"),
+            "total": 0,
+            "top_types": [],
+            "summary": "No live calls available right now (or time parsing failed).",
+            "items": [],
+        }
+
+    by_type = df["type"].fillna("UNKNOWN").astype(str).value_counts().head(5)
+    top = [[str(k), int(v)] for k, v in by_type.items()]
     top_label = top[0][0] if top else "—"
 
-    summary = (
-        f"Live calls are currently dominated by {top_label}. "
-        f"This is a real-time awareness view (calls are unverified)."
-    )
+    summary = f"Last {since_hours}h: dominated by {top_label}. Live calls are unverified; awareness only."
+
+    # Items (latest first)
+    out_items = df.sort_values("dt", ascending=False)[["time", "type", "location"]].head(50).to_dict("records")
 
     return {
-        "last_updated": cache["live_last_updated"],
-        "total": total,
+        "since_hours": since_hours,
+        "last_updated": cache.get("live_last_updated"),
+        "total": int(len(df)),
         "top_types": top,
         "summary": summary,
-        "items": cache["live_calls"][:50],
+        "items": out_items,
     }
 
 @app.get("/live-hourly")
@@ -501,3 +527,62 @@ def live_types(since_hours: int = 24, top_n: int = 10):
     top_types = [{"type": str(k), "count": int(v)} for k, v in vc.items()]
 
     return {"since_hours": since_hours, "last_updated": cache["live_last_updated"], "top_types": top_types}
+
+@app.get("/live-geo")
+def live_geo(since_hours: int = 6, limit: int = 500):
+    df = live_df_filtered(since_hours)
+    if df.empty:
+        return {"since_hours": since_hours, "last_updated": cache.get("live_last_updated"), "items": []}
+
+    # Try common coordinate column names
+    lat_col = None
+    lng_col = None
+    for c in ["lat", "latitude", "Latitude", "LAT"]:
+        if c in df.columns:
+            lat_col = c
+            break
+    for c in ["lng", "lon", "long", "longitude", "Longitude", "LON"]:
+        if c in df.columns:
+            lng_col = c
+            break
+
+    if not lat_col or not lng_col:
+        # No coordinates in live feed → map overlay can’t be drawn
+        return {
+            "since_hours": since_hours,
+            "last_updated": cache.get("live_last_updated"),
+            "items": [],
+            "note": "Live feed has no lat/lng columns (map overlay disabled).",
+        }
+
+    # Build items
+    out = df.copy()
+    out[lat_col] = pd.to_numeric(out[lat_col], errors="coerce")
+    out[lng_col] = pd.to_numeric(out[lng_col], errors="coerce")
+    out = out.dropna(subset=[lat_col, lng_col])
+
+    if out.empty:
+        return {"since_hours": since_hours, "last_updated": cache.get("live_last_updated"), "items": []}
+
+    cols = []
+    for c in ["time", "type", "location"]:
+        if c in out.columns:
+            cols.append(c)
+
+    cols += [lat_col, lng_col]
+
+    out = out.sort_values("dt", ascending=False).head(int(limit))
+
+    items = []
+    for _, r in out.iterrows():
+        items.append(
+            {
+                "time": str(r["time"]) if "time" in out.columns else "",
+                "type": str(r["type"]) if "type" in out.columns else "UNKNOWN",
+                "location": str(r["location"]) if "location" in out.columns else "",
+                "lat": float(r[lat_col]),
+                "lng": float(r[lng_col]),
+            }
+        )
+
+    return {"since_hours": since_hours, "last_updated": cache.get("live_last_updated"), "items": items}
