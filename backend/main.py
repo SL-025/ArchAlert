@@ -8,6 +8,20 @@ import os
 import glob
 import re
 from datetime import timedelta
+from app.risk_lens import LLM_LAST_ERROR 
+
+
+from fastapi import Query
+
+from app.risk_lens import (
+    bbox_from_points,
+    in_bbox,
+    llm_narrative,
+    parse_region_from_query,
+    score_tiles,
+    split_bbox_region,
+    template_narrative,
+)
 
 app = FastAPI()
 
@@ -586,3 +600,61 @@ def live_geo(since_hours: int = 6, limit: int = 500):
         )
 
     return {"since_hours": since_hours, "last_updated": cache.get("live_last_updated"), "items": items}
+
+#LLMS
+@app.get("/risk-tiles")
+def risk_tiles(
+    since_hours: int = Query(6, ge=1, le=72),
+    tile_km: float = Query(0.45, ge=0.2, le=2.0),
+):
+    live = live_geo(since_hours=since_hours, limit=500)
+    items = live.get("items", []) if isinstance(live, dict) else []
+    scored = score_tiles(items, tile_km=tile_km, max_tiles=14)
+    return {"since_hours": since_hours, **scored}
+
+@app.get("/ask-risk")
+async def ask_risk(
+    q: str = Query(..., min_length=2, max_length=200),
+    since_hours: int = Query(6, ge=1, le=72),
+):
+    live = live_geo(since_hours=since_hours, limit=500)
+    items = live.get("items", []) if isinstance(live, dict) else []
+
+    region = parse_region_from_query(q)
+    city_bbox = bbox_from_points(items)
+    region_bbox = split_bbox_region(city_bbox, region)
+
+    filtered = [p for p in items if in_bbox(p, region_bbox)]
+    scored = score_tiles(filtered, tile_km=0.45, max_tiles=10)
+    tiles = scored["tiles"]
+
+    fallback_used = None
+
+    # Fallback A: if region has no tiles, try city-wide tiles
+    if len(tiles) == 0 and len(items) > 0:
+        scored2 = score_tiles(items, tile_km=0.45, max_tiles=10)
+        tiles = scored2["tiles"]
+        if len(tiles) > 0:
+            fallback_used = "city_wide_tiles"
+
+    prompt = (
+        f"User query: {q}\n"
+        f"Region interpreted: {region}\n"
+        f"Window: last {since_hours} hours\n"
+        f"Top zones (each has score and top_type): {tiles}\n\n"
+        "Write an answer that sounds like a helpful assistant.\n"
+        "Rules: awareness only, no prediction, no invented streets.\n"
+    )
+
+    llm_text = await llm_narrative(prompt)
+    llm_used = bool(llm_text and llm_text.strip())
+    answer = llm_text.strip() if llm_used else template_narrative(region, since_hours, tiles)
+
+    return {
+        "q": q,
+        "region": region,
+        "since_hours": since_hours,
+        "answer": answer,
+        "tiles": tiles,
+        "fallback_used": fallback_used,
+    }
