@@ -45,13 +45,17 @@ Backend
 ## Project Structure
 
 ArchAlert/
+
 ├── backend/
+
 │   ├── main.py
 │   ├── app/risk_lens.py
 │   ├── requirements.txt
 │   └── .env.example
+
 │
 ├── frontend/
+
 │   ├── app/
 │   ├── components/
 │   ├── package.json
