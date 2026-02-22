@@ -15,3 +15,10 @@ backend/.venv/
 frontend/.venv/
 venv/
 ENV/
+
+# Ignore virtual envs
+.venv/
+backend/.venv/
+frontend/.venv/
+venv/
+ENV/

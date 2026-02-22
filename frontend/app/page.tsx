@@ -81,16 +81,25 @@ export default function Home() {
   const availableMonths: string[] = meta?.available_month_names ?? ["January2026"];
 
   return (
-    <div style={{ padding: 18, fontFamily: "sans-serif", background: "#f8fafc", minHeight: "100vh" }}>
+    <div>
       <NavBar />
 
-      <div style={{ marginBottom: 14 }}>
-        <h1 style={{ margin: 0 }}>ArchAlert</h1>
-        <div style={{ color: "#64748b", marginTop: 6 }}>
-          AI‑Powered Urban Safety Awareness • Calls for Service are unverified • Not predictive policing
-        </div>
-        <div style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>
-          {loadingAll ? "Refreshing dashboard..." : "Ready"} • Last refresh: <b>{lastRefresh || "—"}</b>
+      <div className="surface2" style={{ padding: 16, marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div>
+            <div className="h1">ArchAlert</div>
+            <div className="sub">
+              AI‑Powered Urban Safety Awareness • Calls for Service are unverified • Not predictive policing
+            </div>
+          </div>
+
+          <div className="badge" title="Auto refresh interval is 60 seconds">
+            <span className="dot" />
+            <span>
+              {loadingAll ? "Refreshing..." : "Ready"} • Last refresh:{" "}
+              <b style={{ color: "rgba(255,255,255,0.9)" }}>{lastRefresh || "—"}</b>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -127,14 +136,14 @@ export default function Home() {
         {showLive ? (
           <Insights liveTotal={liveTotal} topTypes={topTypes} lastUpdated={lastUpdated} />
         ) : (
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, background: "#fff" }}>
-            <h3 style={{ marginTop: 0 }}>Insights</h3>
-            <div style={{ color: "#64748b" }}>Turn on “Live Layer” to view insights.</div>
+          <div className="surface2" style={{ padding: 14 }}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>Insights</div>
+            <div style={{ color: "rgba(255,255,255,0.62)" }}>Turn on “Live Layer” to view insights.</div>
           </div>
         )}
       </div>
 
-      <div style={{ marginTop: 12, fontSize: 12, color: "#64748b" }}>
+      <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,0.62)" }}>
         Loaded: {monthly?.loaded_file ? String(monthly.loaded_file) : "—"} • Stats rows: {monthlyStats?.total_rows ?? "—"}
       </div>
     </div>
