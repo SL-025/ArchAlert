@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MapContainer, TileLayer, Rectangle, CircleMarker } from "react-leaflet";
+import dynamic from "next/dynamic";
 import "leaflet/dist/leaflet.css";
 
 type AnyCell = Record<string, any>;
@@ -9,6 +9,11 @@ type AnyCell = Record<string, any>;
 type DrawItem =
   | { kind: "rect"; bounds: [[number, number], [number, number]]; value: number }
   | { kind: "point"; lat: number; lng: number; value: number; radius: number };
+
+const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
+const Rectangle = dynamic(() => import("react-leaflet").then((m) => m.Rectangle), { ssr: false });
+const CircleMarker = dynamic(() => import("react-leaflet").then((m) => m.CircleMarker), { ssr: false });
 
 export default function MapPanel({
   monthlyCells,
@@ -32,7 +37,8 @@ export default function MapPanel({
     };
 
     for (const c of cells) {
-      const vRaw = c.count ?? c.value ?? c.weight ?? c.n ?? c.total ?? c.intensity ?? c.incidents ?? 0;
+      const vRaw =
+        c.count ?? c.value ?? c.weight ?? c.n ?? c.total ?? c.intensity ?? c.incidents ?? 0;
       const value = Number(vRaw) || 0;
 
       const minLat = c.min_lat ?? c.south ?? c.sw_lat ?? c.lat_min ?? c.ymin;
@@ -86,13 +92,12 @@ export default function MapPanel({
       const lat = toNum(latRaw);
       const lng = toNum(lngRaw);
 
-      if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        pointsRaw.push({ lat, lng, value });
-      }
+      if (Number.isFinite(lat) && Number.isFinite(lng)) pointsRaw.push({ lat, lng, value });
     }
 
     const BIN = 0.003;
-    const keyFor = (lat: number, lng: number) => `${Math.round(lat / BIN) * BIN}|${Math.round(lng / BIN) * BIN}`;
+    const keyFor = (lat: number, lng: number) =>
+      `${Math.round(lat / BIN) * BIN}|${Math.round(lng / BIN) * BIN}`;
 
     const bins = new Map<string, { lat: number; lng: number; value: number; n: number }>();
     for (const p of pointsRaw) {
@@ -134,7 +139,12 @@ export default function MapPanel({
   const styleRect = (v: number) => {
     const fill = colorFor(v, normalized.max);
     const alpha = Math.min(0.58, 0.14 + (v / Math.max(1, normalized.max)) * 0.5);
-    return { color: "rgba(255,255,255,0.18)", weight: 1, fillColor: fill, fillOpacity: alpha } as const;
+    return {
+      color: "rgba(255,255,255,0.18)",
+      weight: 1,
+      fillColor: fill,
+      fillOpacity: alpha,
+    } as const;
   };
 
   const showEmpty = !showHistorical || normalized.items.length === 0;
@@ -171,7 +181,10 @@ export default function MapPanel({
           }}
         >
           <MapContainer center={center} zoom={11} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
-            <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
 
             {!showEmpty &&
               normalized.items.map((it, idx) => {
@@ -187,13 +200,18 @@ export default function MapPanel({
                     key={`p-${idx}`}
                     center={[it.lat, it.lng]}
                     radius={it.radius}
-                    pathOptions={{ color: "rgba(255,255,255,0.20)", fillColor: fill, fillOpacity: alpha, weight: 1 }}
+                    pathOptions={{
+                      color: "rgba(255,255,255,0.20)",
+                      fillColor: fill,
+                      fillOpacity: alpha,
+                      weight: 1,
+                    }}
                   />
                 );
               })}
           </MapContainer>
 
-          {/* Legend: minimized by default, expands on hover */}
+          {/* Legend */}
           <div
             onMouseEnter={() => setLegendOpen(true)}
             onMouseLeave={() => setLegendOpen(false)}
@@ -215,12 +233,13 @@ export default function MapPanel({
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
               <div style={{ fontWeight: 950, fontSize: 12 }}>Legend</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.60)", fontWeight: 900 }}>{legendOpen ? "Hover to close" : "Hover"}</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.60)", fontWeight: 900 }}>
+                {legendOpen ? "Hover to close" : "Hover"}
+              </div>
             </div>
 
             <div style={{ height: 10 }} />
 
-            {/* Always visible mini legend */}
             <div
               style={{
                 height: 10,
@@ -235,7 +254,6 @@ export default function MapPanel({
               <span>High</span>
             </div>
 
-            {/* Expandable details */}
             <div
               style={{
                 maxHeight: legendOpen ? 260 : 0,
@@ -268,10 +286,6 @@ export default function MapPanel({
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)", fontWeight: 900 }}>{s.v}</div>
                   </div>
                 ))}
-              </div>
-
-              <div style={{ marginTop: 10, fontSize: 11, color: "rgba(255,255,255,0.60)" }}>
-                Rendered layers: {showHistorical ? "Historical heat" : "None"}
               </div>
             </div>
           </div>
