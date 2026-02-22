@@ -378,6 +378,13 @@ def monthly_stats(month: str = "January2026", last_days: int | None = None):
     hour_series = []
     if time_col:
         dt = pd.to_datetime(df[time_col], errors="coerce")
+        hours = dt.dt.hour.dropna()
+        if not hours.empty and hours.nunique() == 1 and int(hours.iloc[0]) == 0:
+            # time column has no time-of-day (all midnight) -> hourly chart is misleading
+            hour_series = []
+        else:
+            hour_counts = hours.astype(int).value_counts().sort_index()
+            hour_series = [{"hour": int(h), "count": int(c)} for h, c in hour_counts.items()]
         hours = dt.dt.hour.dropna().astype(int)
         hour_counts = hours.value_counts().sort_index()
         hour_series = [{"hour": int(h), "count": int(c)} for h, c in hour_counts.items()]
