@@ -20,7 +20,7 @@ export default function KpiCards({
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
-      <Card title="Historical Heat Cells (Jan 2026)" value={monthlyCellCount || 0} />
+      <Card title="Historical Heat Cells" value={monthlyCellCount || 0} />
       <Card title="Live Calls (Unverified)" value={liveTotal || 0} />
       <Card title="Top Live Type" value={topType || "—"} />
       <Card title="Live Last Updated" value={lastUpdated ? new Date(lastUpdated).toLocaleString() : "—"} />

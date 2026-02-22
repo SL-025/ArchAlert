@@ -10,7 +10,6 @@ export default function HeatMap({ cells }: { cells: Cell[] }) {
   const mapRef = useRef<L.Map | null>(null);
   const max = Math.max(...cells.map((c) => c.count), 1);
 
-  // ✅ cleanup on unmount / hot reload
   useEffect(() => {
     return () => {
       if (mapRef.current) {
