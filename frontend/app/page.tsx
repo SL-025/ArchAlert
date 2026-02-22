@@ -7,6 +7,7 @@ import Filters from "./components/Filters";
 import MapPanel from "./components/MapPanel";
 import Insights from "./components/Insights";
 import { useLiveWindow } from "./lib/useLiveWindow";
+import { apiUrl } from "./lib/api";
 
 export default function Home() {
   const [meta, setMeta] = useState<any>(null);
@@ -28,22 +29,22 @@ export default function Home() {
   const [yearRangeUiOnly, setYearRangeUiOnly] = useState<1 | 3>(1);
 
   const loadAll = async () => {
-    const m = await fetch("http://localhost:8000/meta", { cache: "no-store" }).then((r) => r.json());
+    const m = await fetch(apiUrl("/meta"), { cache: "no-store" }).then((r) => r.json());
 
     const daysParam = lastDays ? `&last_days=${lastDays}` : "";
     const heatUrl =
       monthMode === "single"
-        ? `http://localhost:8000/monthly-heat?month=${encodeURIComponent(selectedMonth)}${daysParam}`
-        : `http://localhost:8000/historical-heat?months=${monthsBack}${daysParam}`;
+        ? apiUrl(`/monthly-heat?month=${encodeURIComponent(selectedMonth)}${daysParam}`)
+        : apiUrl(`/historical-heat?months=${monthsBack}${daysParam}`);
 
-    const statsUrl = `http://localhost:8000/monthly-stats?month=${encodeURIComponent(selectedMonth)}${daysParam}`;
+    const statsUrl = apiUrl(`/monthly-stats?month=${encodeURIComponent(selectedMonth)}${daysParam}`);
 
     const hours = sinceToHours(since);
 
-    const lg = await fetch(`http://localhost:8000/live-geo?since_hours=${hours}`, { cache: "no-store" }).then((r) => r.json());
+    const lg = await fetch(apiUrl(`/live-geo?since_hours=${hours}`), { cache: "no-store" }).then((r) => r.json());
     const mh = await fetch(heatUrl, { cache: "no-store" }).then((r) => r.json());
     const st = await fetch(statsUrl, { cache: "no-store" }).then((r) => r.json());
-    const ls = await fetch(`http://localhost:8000/live-summary?since_hours=${hours}`, { cache: "no-store" }).then((r) => r.json());
+    const ls = await fetch(apiUrl(`/live-summary?since_hours=${hours}`), { cache: "no-store" }).then((r) => r.json());
 
     setMeta(m);
     setLiveGeo(lg);
@@ -107,13 +108,7 @@ export default function Home() {
           availableMonths={availableMonths}
         />
 
-        <MapPanel
-          monthlyCells={monthlyCells}
-          showHistorical={showHistorical}
-          showLive={showLive}
-          livePoints={liveGeo?.items ?? []}
-          mapKey={`${monthMode}-${selectedMonth}-${monthsBack}-${lastDays}-${showHistorical}-${showLive}-${since}`}
-        />
+        <MapPanel monthlyCells={monthlyCells} showHistorical={showHistorical} mapKey={`${monthMode}-${selectedMonth}-${monthsBack}-${lastDays}-${showHistorical}-${showLive}-${since}`} />
 
         <div style={{ display: "grid", gap: 12 }}>
           {showLive ? (

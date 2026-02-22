@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "./ui";
+import { apiUrl } from "../lib/api";
 
 function fmtMaybeDate(s: string) {
   if (!s) return "—";
@@ -40,13 +41,13 @@ export default function Insights(props: {
     setErr("");
     setAskedOnce(true);
     try {
-      const url = `http://localhost:8000/ask-risk?q=${encodeURIComponent(q)}&since_hours=${hours}`;
+      const url = apiUrl(`/ask-risk?q=${encodeURIComponent(q)}&since_hours=${hours}`);
       const res = await fetch(url, { cache: "no-store" }).then((r) => r.json());
 
       setAnswer(String(res?.answer ?? ""));
       setTiles(Array.isArray(res?.tiles) ? res.tiles : []);
     } catch {
-      setErr("Failed to reach backend /ask-risk. Confirm backend is running on localhost:8000.");
+      setErr("Failed to reach backend /ask-risk. Confirm backend is running.");
       setTiles([]);
     } finally {
       setLoading(false);
@@ -54,7 +55,6 @@ export default function Insights(props: {
   };
 
   const openRiskMap = () => {
-    // Always allow opening; the risk-map page will show “no tiles” if none exist.
     router.push(`/risk-map?q=${encodeURIComponent(q)}&since_hours=${hours}`);
   };
 
@@ -70,7 +70,6 @@ export default function Insights(props: {
       <div style={{ height: 12 }} />
 
       <div style={{ display: "grid", gap: 12 }}>
-        {/* AI Summary (no LLM badge) */}
         <div
           className="surface"
           style={{
@@ -120,7 +119,6 @@ export default function Insights(props: {
           ) : null}
         </div>
 
-        {/* Top Live Types */}
         <div
           className="surface"
           style={{

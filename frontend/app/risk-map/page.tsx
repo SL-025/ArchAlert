@@ -6,6 +6,7 @@ import NavBar from "../components/NavBar";
 import { Button } from "../components/ui";
 import { MapContainer, TileLayer, Rectangle, CircleMarker } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import { apiUrl } from "../lib/api";
 
 type RiskTile = {
   id: string;
@@ -153,10 +154,9 @@ export default function RiskMapPage() {
     setLoading(true);
     setErr("");
     try {
-      const r1 = await fetch(
-        `http://localhost:8000/ask-risk?q=${encodeURIComponent(q)}&since_hours=${sinceHours}`,
-        { cache: "no-store" }
-      ).then((r) => r.json());
+      const r1 = await fetch(apiUrl(`/ask-risk?q=${encodeURIComponent(q)}&since_hours=${sinceHours}`), {
+        cache: "no-store",
+      }).then((r) => r.json());
 
       setAnswer(String(r1?.answer ?? ""));
       setRegion(String(r1?.region ?? "city"));
@@ -172,21 +172,21 @@ export default function RiskMapPage() {
         return;
       }
 
-      const meta = await fetch("http://localhost:8000/meta", { cache: "no-store" }).then((r) => r.json());
+      const meta = await fetch(apiUrl("/meta"), { cache: "no-store" }).then((r) => r.json());
       const months: string[] = meta?.available_month_names ?? [];
       const pick = months?.[0] || "January2026";
       setHistMonth(pick);
 
-      const heat = await fetch(`http://localhost:8000/monthly-heat?month=${encodeURIComponent(pick)}`, {
-        cache: "no-store",
-      }).then((r) => r.json());
+      const heat = await fetch(apiUrl(`/monthly-heat?month=${encodeURIComponent(pick)}`), { cache: "no-store" }).then((r) =>
+        r.json()
+      );
 
       const cells = Array.isArray(heat?.cells) ? heat.cells : [];
       setMonthlyCells(cells);
 
       if (cells.length > 0) setSource("historical_heat");
       else setSource("none");
-    } catch (e: any) {
+    } catch {
       setErr("Risk map fetch failed. Check backend is running and endpoints return JSON.");
       setSource("none");
     } finally {
@@ -203,7 +203,17 @@ export default function RiskMapPage() {
     <div style={{ padding: 18, fontFamily: "sans-serif", background: "#0b1220", minHeight: "100vh" }}>
       <NavBar />
 
-      <div className="surface" style={{ padding: 16, marginTop: 12, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+      <div
+        className="surface"
+        style={{
+          padding: 16,
+          marginTop: 12,
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "center",
+        }}
+      >
         <div>
           <div style={{ fontWeight: 950, fontSize: 20 }}>Risk Map</div>
           <div style={{ marginTop: 6, color: "rgba(255,255,255,0.78)" }}>
@@ -226,28 +236,49 @@ export default function RiskMapPage() {
         <div className="surface2" style={{ padding: 14 }}>
           <div style={{ fontWeight: 950, marginBottom: 10 }}>{source === "live_tiles" ? "Danger tiles" : "Fallback grid"}</div>
 
-          <div style={{ height: 560, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.14)", position: "relative" }}>
+          <div
+            style={{
+              height: 560,
+              borderRadius: 16,
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.14)",
+              position: "relative",
+            }}
+          >
             <MapContainer center={center} zoom={11} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
               <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
               {source === "live_tiles" &&
                 tiles.map((t, i) => {
-                  const fill = colorFor(t.score, Math.max(1, tiles[0]?.score ?? 1));
-                  const alpha = Math.min(0.55, 0.16 + (t.score / Math.max(1, tiles[0]?.score ?? 1)) * 0.45);
-                  return <Rectangle key={t.id || i} bounds={t.bounds} pathOptions={{ color: "rgba(255,255,255,0.20)", weight: 1, fillColor: fill, fillOpacity: alpha }} />;
+                  const best = Math.max(1, tiles[0]?.score ?? 1);
+                  const fill = colorFor(t.score, best);
+                  const alpha = Math.min(0.55, 0.16 + (t.score / best) * 0.45);
+                  return (
+                    <Rectangle
+                      key={t.id || i}
+                      bounds={t.bounds}
+                      pathOptions={{ color: "rgba(255,255,255,0.20)", weight: 1, fillColor: fill, fillOpacity: alpha }}
+                    />
+                  );
                 })}
 
               {source === "historical_heat" &&
                 hist.rects.map((r, i) => {
                   const fill = colorFor(r.value, hist.max);
                   const alpha = Math.min(0.55, 0.14 + (r.value / Math.max(1, hist.max)) * 0.45);
-                  return <Rectangle key={`hr-${i}`} bounds={r.bounds} pathOptions={{ color: "rgba(255,255,255,0.20)", weight: 1, fillColor: fill, fillOpacity: alpha }} />;
+                  return (
+                    <Rectangle
+                      key={`hr-${i}`}
+                      bounds={r.bounds}
+                      pathOptions={{ color: "rgba(255,255,255,0.20)", weight: 1, fillColor: fill, fillOpacity: alpha }}
+                    />
+                  );
                 })}
 
               {source === "historical_heat" &&
                 hist.points.map((p, i) => {
                   const fill = colorFor(p.value, hist.max);
-                  const alpha = Math.min(0.75, 0.22 + (p.value / Math.max(1, hist.max)) * 0.50);
+                  const alpha = Math.min(0.75, 0.22 + (p.value / Math.max(1, hist.max)) * 0.5);
                   return (
                     <CircleMarker
                       key={`hp-${i}`}
@@ -260,7 +291,17 @@ export default function RiskMapPage() {
             </MapContainer>
 
             {source === "none" && (
-              <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "rgba(10,16,32,0.75)", color: "rgba(255,255,255,0.75)", fontWeight: 900 }}>
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  background: "rgba(10,16,32,0.75)",
+                  color: "rgba(255,255,255,0.75)",
+                  fontWeight: 900,
+                }}
+              >
                 No tiles and no historical grid returned.
               </div>
             )}
@@ -298,14 +339,23 @@ export default function RiskMapPage() {
               minHeight: 180,
             }}
           >
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.72)", fontWeight: 900, marginBottom: 10 }}>
-              Top zones
-            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.72)", fontWeight: 900, marginBottom: 10 }}>Top zones</div>
 
             {source === "live_tiles" && tiles.length > 0 ? (
               <div style={{ display: "grid", gap: 8 }}>
                 {tiles.slice(0, 6).map((t, i) => (
-                  <div key={t.id || i} className="surface2" style={{ padding: "10px 12px", borderRadius: 14, display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                  <div
+                    key={t.id || i}
+                    className="surface2"
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 14,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      alignItems: "center",
+                    }}
+                  >
                     <div style={{ fontWeight: 900, color: "rgba(255,255,255,0.92)" }}>{t.top_type ?? "—"}</div>
                     <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900 }}>{Number(t.score ?? 0).toFixed(1)}</div>
                   </div>
