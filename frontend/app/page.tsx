@@ -1,134 +1,162 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+
 import NavBar from "./components/NavBar";
-import KpiCards from "./components/KpiCards";
 import Filters from "./components/Filters";
-import MapPanel from "./components/MapPanel";
+import KpiCards from "./components/KpiCards";
 import Insights from "./components/Insights";
-import { useLiveWindow } from "./lib/useLiveWindow";
+import { apiUrl } from "./lib/api";
 
-export default function Home() {
-  const [meta, setMeta] = useState<any>(null);
-  const [monthly, setMonthly] = useState<any>(null);
-  const [monthlyStats, setMonthlyStats] = useState<any>(null);
-  const [liveSummary, setLiveSummary] = useState<any>(null);
+// ✅ Leaflet must never SSR
+const MapPanel = dynamic(() => import("./components/MapPanel"), {
+  ssr: false,
+  loading: () => <div style={{ minHeight: 520 }} />,
+});
 
-  const { since, setSince } = useLiveWindow("6h");
-  const sinceToHours = (s: "1h" | "6h" | "24h") => (s === "1h" ? 1 : s === "6h" ? 6 : 24);
+type AnyCell = Record<string, any>;
 
-  const [liveGeo, setLiveGeo] = useState<any>(null);
+export default function DashboardPage() {
+  const [since, setSince] = useState<"1h" | "6h" | "24h">("6h");
+
   const [showHistorical, setShowHistorical] = useState(true);
   const [showLive, setShowLive] = useState(true);
 
   const [monthMode, setMonthMode] = useState<"single" | "multi">("single");
   const [selectedMonth, setSelectedMonth] = useState("January2026");
-  const [monthsBack, setMonthsBack] = useState(5);
+  const [monthsBack, setMonthsBack] = useState(3);
   const [lastDays, setLastDays] = useState<0 | 2 | 5>(0);
   const [yearRangeUiOnly, setYearRangeUiOnly] = useState<1 | 3>(1);
 
-  const loadAll = async () => {
-    const m = await fetch("http://localhost:8000/meta", { cache: "no-store" }).then((r) => r.json());
+  const [availableMonths, setAvailableMonths] = useState<string[]>([
+    "September2025",
+    "October2025",
+    "November2025",
+    "December2025",
+    "January2026",
+  ]);
 
-    const daysParam = lastDays ? `&last_days=${lastDays}` : "";
-    const heatUrl =
-      monthMode === "single"
-        ? `http://localhost:8000/monthly-heat?month=${encodeURIComponent(selectedMonth)}${daysParam}`
-        : `http://localhost:8000/historical-heat?months=${monthsBack}${daysParam}`;
+  const [monthlyCells, setMonthlyCells] = useState<AnyCell[]>([]);
 
-    const statsUrl = `http://localhost:8000/monthly-stats?month=${encodeURIComponent(selectedMonth)}${daysParam}`;
+  const [liveTotal, setLiveTotal] = useState<number>(0);
+  const [topTypes, setTopTypes] = useState<any[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<string>("");
 
-    const hours = sinceToHours(since);
+  // forces map remount when filters change (also helps Leaflet dev quirks)
+  const mapKey = useMemo(() => {
+    return `${monthMode}-${selectedMonth}-${monthsBack}-${lastDays}-${showHistorical}-${showLive}-${since}`;
+  }, [monthMode, selectedMonth, monthsBack, lastDays, showHistorical, showLive, since]);
 
-    const lg = await fetch(`http://localhost:8000/live-geo?since_hours=${hours}`, { cache: "no-store" }).then((r) => r.json());
-    const mh = await fetch(heatUrl, { cache: "no-store" }).then((r) => r.json());
-    const st = await fetch(statsUrl, { cache: "no-store" }).then((r) => r.json());
-    const ls = await fetch(`http://localhost:8000/live-summary?since_hours=${hours}`, { cache: "no-store" }).then((r) => r.json());
+  const refreshLive = async () => {
+    if (!showLive) return;
 
-    setMeta(m);
-    setLiveGeo(lg);
-    setMonthly(mh);
-    setMonthlyStats(st);
-    setLiveSummary(ls);
+    try {
+      // keep your endpoints (adjust only if your backend names differ)
+      const meta = await fetch(apiUrl(`/meta?since=${since}`), { cache: "no-store" }).then((r) => r.json());
+      const typesRes = await fetch(apiUrl(`/live-types?since=${since}`), { cache: "no-store" }).then((r) => r.json());
+
+      setLiveTotal(Number(meta?.live_total ?? meta?.total ?? 0) || 0);
+      setLastUpdated(String(meta?.last_updated ?? meta?.lastUpdated ?? ""));
+
+      // Accept both formats: [[type,count],...] OR [{type,count},...]
+      const raw = typesRes?.top_types ?? typesRes?.types ?? [];
+      if (Array.isArray(raw) && raw.length && Array.isArray(raw[0])) {
+        setTopTypes(raw);
+      } else {
+        setTopTypes((raw ?? []).map((x: any) => [String(x.type ?? x[0] ?? "—"), Number(x.count ?? x[1] ?? 0)]));
+      }
+    } catch {
+      setLiveTotal(0);
+      setTopTypes([]);
+      setLastUpdated("");
+    }
+  };
+
+  const refreshHistorical = async () => {
+    if (!showHistorical) {
+      setMonthlyCells([]);
+      return;
+    }
+
+    try {
+      const url =
+        monthMode === "single"
+          ? apiUrl(`/monthly-heat?month=${encodeURIComponent(selectedMonth)}`)
+          : apiUrl(`/monthly-heat-multi?months_back=${monthsBack}&last_days=${lastDays}`);
+
+      const res = await fetch(url, { cache: "no-store" }).then((r) => r.json());
+
+      const cells = Array.isArray(res) ? res : Array.isArray(res?.cells) ? res.cells : [];
+      setMonthlyCells(cells);
+
+      if (Array.isArray(res?.available_months) && res.available_months.length) {
+        setAvailableMonths(res.available_months.map((x: any) => String(x)));
+      }
+    } catch {
+      setMonthlyCells([]);
+    }
   };
 
   useEffect(() => {
-    loadAll();
+    refreshLive();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthMode, selectedMonth, monthsBack, lastDays, since]);
+  }, [since, showLive]);
 
   useEffect(() => {
-    const id = setInterval(() => loadAll(), 60_000);
-    return () => clearInterval(id);
+    refreshHistorical();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthMode, selectedMonth, monthsBack, lastDays, since]);
-
-  const monthlyCells = monthly?.cells ?? [];
-  const liveTotal = liveSummary?.total ?? 0;
-  const topTypes = liveSummary?.top_types ?? [];
-  const topType = topTypes?.[0]?.[0] ?? "—";
-  const lastUpdated = meta?.live_last_updated ?? "";
-  const availableMonths: string[] = meta?.available_month_names ?? ["January2026"];
+  }, [showHistorical, monthMode, selectedMonth, monthsBack, lastDays]);
 
   return (
-    <div style={{ padding: 18, fontFamily: "sans-serif", background: "#0b1220", minHeight: "100vh" }}>
+    <div style={{ padding: 14 }}>
       <NavBar />
 
-      <div className="surface" style={{ padding: 18, marginBottom: 12, textAlign: "center" }}>
-        <h1 className="heroTitle" style={{ margin: 0 }}>
-          ArchAlert
-        </h1>
-        <div className="heroSub" style={{ marginTop: 10 }}>
-          AI‑Powered Urban Safety Awareness • Calls for Service are unverified • Not predictive policing
+      {/* KPI row (full width) */}
+      <KpiCards
+        monthlyCellCount={Array.isArray(monthlyCells) ? monthlyCells.length : 0}
+        liveTotal={liveTotal}
+        topType={String(topTypes?.[0]?.[0] ?? "—")}
+        lastUpdated={lastUpdated}
+      />
+
+      <div style={{ height: 14 }} />
+
+      {/* ✅ EXACT UI: Filters | Map | Insights */}
+      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr 420px", gap: 14, alignItems: "start" }}>
+        {/* LEFT */}
+        <div style={{ display: "grid", gap: 14 }}>
+          <Filters
+            since={since}
+            setSince={setSince}
+            showHistorical={showHistorical}
+            setShowHistorical={setShowHistorical}
+            showLive={showLive}
+            setShowLive={setShowLive}
+            onRefreshLive={refreshLive}
+            monthMode={monthMode}
+            setMonthMode={setMonthMode}
+            selectedMonth={selectedMonth}
+            setSelectedMonth={setSelectedMonth}
+            monthsBack={monthsBack}
+            setMonthsBack={setMonthsBack}
+            lastDays={lastDays}
+            setLastDays={setLastDays}
+            yearRangeUiOnly={yearRangeUiOnly}
+            setYearRangeUiOnly={setYearRangeUiOnly}
+            availableMonths={availableMonths}
+          />
         </div>
-      </div>
 
-      <KpiCards monthlyCellCount={monthlyCells.length} liveTotal={liveTotal} topType={topType} lastUpdated={lastUpdated} />
-
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr 380px", gap: 12, marginTop: 12 }}>
-        <Filters
-          since={since}
-          setSince={setSince}
-          showHistorical={showHistorical}
-          setShowHistorical={setShowHistorical}
-          showLive={showLive}
-          setShowLive={setShowLive}
-          onRefreshLive={loadAll}
-          monthMode={monthMode}
-          setMonthMode={setMonthMode}
-          selectedMonth={selectedMonth}
-          setSelectedMonth={setSelectedMonth}
-          monthsBack={monthsBack}
-          setMonthsBack={setMonthsBack}
-          lastDays={lastDays}
-          setLastDays={setLastDays}
-          yearRangeUiOnly={yearRangeUiOnly}
-          setYearRangeUiOnly={setYearRangeUiOnly}
-          availableMonths={availableMonths}
-        />
-
-        <MapPanel
-          monthlyCells={monthlyCells}
-          showHistorical={showHistorical}
-          showLive={showLive}
-          livePoints={liveGeo?.items ?? []}
-          mapKey={`${monthMode}-${selectedMonth}-${monthsBack}-${lastDays}-${showHistorical}-${showLive}-${since}`}
-        />
-
-        <div style={{ display: "grid", gap: 12 }}>
-          {showLive ? (
-            <Insights liveTotal={liveTotal} topTypes={topTypes} lastUpdated={lastUpdated} since={since} />
-          ) : (
-            <div className="surface2" style={{ padding: 14 }}>
-              <div style={{ fontWeight: 950, marginBottom: 8 }}>Insights</div>
-              <div style={{ color: "rgba(255,255,255,0.68)" }}>Turn on “Live Layer” to view insights.</div>
-            </div>
-          )}
+        {/* CENTER */}
+        <div style={{ display: "grid", gap: 14 }}>
+          <MapPanel monthlyCells={monthlyCells} showHistorical={showHistorical} mapKey={mapKey} />
         </div>
-      </div>
 
-      <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,0.65)" }}>
-        Loaded: {monthly?.loaded_file ? String(monthly.loaded_file) : "—"} • Stats rows: {monthlyStats?.total_rows ?? "—"}
+        {/* RIGHT */}
+        <div style={{ display: "grid", gap: 14 }}>
+          <Insights liveTotal={liveTotal} topTypes={topTypes} lastUpdated={lastUpdated} since={since} />
+        </div>
       </div>
     </div>
   );

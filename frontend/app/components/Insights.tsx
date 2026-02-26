@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "./ui";
+import { Button, Card, Pill } from "./ui";
+import { apiUrl } from "../lib/api";
 
 function fmtMaybeDate(s: string) {
   if (!s) return "—";
@@ -22,7 +23,7 @@ export default function Insights(props: {
   const router = useRouter();
   const hours = sinceToHours(props.since);
 
-  const top = Array.isArray(props.topTypes) ? props.topTypes.slice(0, 8) : [];
+  const top = useMemo(() => (Array.isArray(props.topTypes) ? props.topTypes.slice(0, 8) : []), [props.topTypes]);
 
   const [q, setQ] = useState("In the south, where should I avoid right now?");
   const [loading, setLoading] = useState(false);
@@ -31,22 +32,21 @@ export default function Insights(props: {
   const [err, setErr] = useState<string>("");
   const [askedOnce, setAskedOnce] = useState(false);
 
-  const placeholder = useMemo(() => {
-    return "Try: 'In the east where not to go?' or 'Downtown hotspots last 24 hours'";
-  }, []);
+  const placeholder = useMemo(() => "Try: 'In the east where not to go?' or 'Downtown hotspots last 24 hours'", []);
 
   const ask = async () => {
     setLoading(true);
     setErr("");
     setAskedOnce(true);
+
     try {
-      const url = `http://localhost:8000/ask-risk?q=${encodeURIComponent(q)}&since_hours=${hours}`;
+      const url = apiUrl(`/ask-risk?q=${encodeURIComponent(q)}&since_hours=${hours}`);
       const res = await fetch(url, { cache: "no-store" }).then((r) => r.json());
 
       setAnswer(String(res?.answer ?? ""));
       setTiles(Array.isArray(res?.tiles) ? res.tiles : []);
     } catch {
-      setErr("Failed to reach backend /ask-risk. Confirm backend is running on localhost:8000.");
+      setErr("Failed to reach backend /ask-risk. Confirm backend is running.");
       setTiles([]);
     } finally {
       setLoading(false);
@@ -54,23 +54,20 @@ export default function Insights(props: {
   };
 
   const openRiskMap = () => {
-    // Always allow opening; the risk-map page will show “no tiles” if none exist.
     router.push(`/risk-map?q=${encodeURIComponent(q)}&since_hours=${hours}`);
   };
 
   return (
-    <div className="surface2" style={{ padding: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 950 }}>Insights</div>
-        <div className="badge">
+    <Card
+      title="Insights"
+      right={
+        <Pill title="Backend timestamp">
           Live updated: <b style={{ color: "rgba(255,255,255,0.92)" }}>{fmtMaybeDate(props.lastUpdated)}</b>
-        </div>
-      </div>
-
-      <div style={{ height: 12 }} />
-
+        </Pill>
+      }
+    >
       <div style={{ display: "grid", gap: 12 }}>
-        {/* AI Summary (no LLM badge) */}
+        {/* AI Summary */}
         <div
           className="surface"
           style={{
@@ -162,6 +159,6 @@ export default function Insights(props: {
           </div>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

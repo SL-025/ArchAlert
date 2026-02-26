@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "./ui";
+import { apiUrl } from "../lib/api";
 
 const sinceToHours = (s: "1h" | "6h" | "24h") => (s === "1h" ? 1 : s === "6h" ? 6 : 24);
 
@@ -24,13 +25,14 @@ export default function RiskAssistant(props: { since: "1h" | "6h" | "24h" }) {
     setLoading(true);
     setErr("");
     try {
-      const url = `http://localhost:8000/ask-risk?q=${encodeURIComponent(q)}&since_hours=${hours}`;
+      const url = apiUrl(`/ask-risk?q=${encodeURIComponent(q)}&since_hours=${hours}`);
       const res = await fetch(url, { cache: "no-store" }).then((r) => r.json());
 
       setAnswer(String(res?.answer ?? ""));
       setTiles(Array.isArray(res?.tiles) ? res.tiles : []);
-    } catch (e: any) {
-      setErr("Failed to reach backend /ask-risk. Check backend is running on :8000.");
+    } catch {
+      setErr("Failed to reach backend /ask-risk. Check backend URL env var and deployment.");
+      setTiles([]);
     } finally {
       setLoading(false);
     }
@@ -121,9 +123,7 @@ export default function RiskAssistant(props: { since: "1h" | "6h" | "24h" }) {
               }}
             >
               <div style={{ fontWeight: 900, color: "rgba(255,255,255,0.92)" }}>{t?.top_type ?? "—"}</div>
-              <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900 }}>
-                {Number(t?.score ?? 0).toFixed(1)}
-              </div>
+              <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900 }}>{Number(t?.score ?? 0).toFixed(1)}</div>
             </div>
           ))}
 

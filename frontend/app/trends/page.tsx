@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import NavBar from "../components/NavBar";
 import { useLiveWindow } from "../lib/useLiveWindow";
+import { apiUrl } from "../lib/api";
 import { Button, Card, LiveWindowToggle, Pill } from "../components/ui";
 import {
   ResponsiveContainer,
@@ -67,19 +68,15 @@ export default function TrendsPage() {
   const [histStats, setHistStats] = useState<any>(null);
 
   const loadLive = async () => {
-    const h = await fetch(`http://localhost:8000/live-hourly?since_hours=${liveHours}`, { cache: "no-store" }).then((r) =>
-      r.json()
-    );
-    const t = await fetch(`http://localhost:8000/live-types?since_hours=${liveHours}`, { cache: "no-store" }).then((r) =>
-      r.json()
-    );
+    const h = await fetch(apiUrl(`/live-hourly?since_hours=${liveHours}`), { cache: "no-store" }).then((r) => r.json());
+    const t = await fetch(apiUrl(`/live-types?since_hours=${liveHours}`), { cache: "no-store" }).then((r) => r.json());
     setLiveHourly(h);
     setLiveTypes(t);
   };
 
   const loadHist = async () => {
-    const st = await fetch(`http://localhost:8000/monthly-stats?month=${encodeURIComponent(histMonth)}`, { cache: "no-store" }).then(
-      (r) => r.json()
+    const st = await fetch(apiUrl(`/monthly-stats?month=${encodeURIComponent(histMonth)}`), { cache: "no-store" }).then((r) =>
+      r.json()
     );
     setHistStats(st);
   };
@@ -110,14 +107,14 @@ export default function TrendsPage() {
     if (Array.isArray(raw) && raw.length && Array.isArray(raw[0])) {
       return raw.map((row: any) => ({ type: String(row[0]), count: Number(row[1]) || 0 }));
     }
-    return (raw as any[]).map((x) => ({ type: String(x.type), count: Number(x.count) || 0 }));
+    return (raw as any[]).map((x) => ({ type: String((x as any).type), count: Number((x as any).count) || 0 }));
   }, [liveTypes]);
 
   const histTypesData = useMemo(() => {
     const raw = (histStats?.type_series ?? []) as any[];
     return raw.map((x) => ({
-      type: String(x.type ?? x[0] ?? ""),
-      count: Number(x.count ?? x[1] ?? 0) || 0,
+      type: String((x as any).type ?? (x as any)[0] ?? ""),
+      count: Number((x as any).count ?? (x as any)[1] ?? 0) || 0,
     }));
   }, [histStats]);
 
@@ -160,9 +157,25 @@ export default function TrendsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={liveHourlyData}>
                   <CartesianGrid stroke="rgba(255,255,255,0.10)" strokeDasharray="3 3" />
-                  <XAxis dataKey="hourLabel" tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 11 }} axisLine={{ stroke: "rgba(255,255,255,0.12)" }} tickLine={{ stroke: "rgba(255,255,255,0.12)" }} />
-                  <YAxis tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 11 }} axisLine={{ stroke: "rgba(255,255,255,0.12)" }} tickLine={{ stroke: "rgba(255,255,255,0.12)" }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: "#0a1020", border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.92)" }} />
+                  <XAxis
+                    dataKey="hourLabel"
+                    tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 11 }}
+                    axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    tickLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                  />
+                  <YAxis
+                    tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 11 }}
+                    axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    tickLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#0a1020",
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      color: "rgba(255,255,255,0.92)",
+                    }}
+                  />
                   <Line type="monotone" dataKey="count" stroke="#34d399" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
@@ -175,9 +188,27 @@ export default function TrendsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={liveTypesData} margin={{ top: 10, right: 10, left: 0, bottom: 80 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.10)" strokeDasharray="3 3" />
-                  <XAxis dataKey="type" interval={0} tick={<CustomTypeTick />} height={80} axisLine={{ stroke: "rgba(255,255,255,0.12)" }} tickLine={{ stroke: "rgba(255,255,255,0.12)" }} />
-                  <YAxis tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 11 }} axisLine={{ stroke: "rgba(255,255,255,0.12)" }} tickLine={{ stroke: "rgba(255,255,255,0.12)" }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: "#0a1020", border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.92)" }} />
+                  <XAxis
+                    dataKey="type"
+                    interval={0}
+                    tick={<CustomTypeTick />}
+                    height={80}
+                    axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    tickLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                  />
+                  <YAxis
+                    tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 11 }}
+                    axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    tickLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#0a1020",
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      color: "rgba(255,255,255,0.92)",
+                    }}
+                  />
                   <Bar dataKey="count" fill="rgba(255,255,255,0.82)" />
                 </BarChart>
               </ResponsiveContainer>
@@ -199,7 +230,9 @@ export default function TrendsPage() {
               <option value="December2025">December2025</option>
               <option value="January2026">January2026</option>
             </select>
-            <Button variant="primary" onClick={loadHist}>Refresh</Button>
+            <Button variant="primary" onClick={loadHist}>
+              Refresh
+            </Button>
           </div>
         }
       >
@@ -212,9 +245,27 @@ export default function TrendsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={histTypesData} margin={{ top: 10, right: 10, left: 0, bottom: 90 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.10)" strokeDasharray="3 3" />
-                  <XAxis dataKey="type" interval={0} tick={<CustomTypeTick />} height={90} axisLine={{ stroke: "rgba(255,255,255,0.12)" }} tickLine={{ stroke: "rgba(255,255,255,0.12)" }} />
-                  <YAxis tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 11 }} axisLine={{ stroke: "rgba(255,255,255,0.12)" }} tickLine={{ stroke: "rgba(255,255,255,0.12)" }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: "#0a1020", border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.92)" }} />
+                  <XAxis
+                    dataKey="type"
+                    interval={0}
+                    tick={<CustomTypeTick />}
+                    height={90}
+                    axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    tickLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                  />
+                  <YAxis
+                    tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 11 }}
+                    axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    tickLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#0a1020",
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      color: "rgba(255,255,255,0.92)",
+                    }}
+                  />
                   <Bar dataKey="count" fill="rgba(255,255,255,0.82)" />
                 </BarChart>
               </ResponsiveContainer>
